@@ -10,12 +10,13 @@ import Queue, math
 from multiprocessing.dummy import Pool as ThreadPool
 
 class Stock:
-    changePrices = []
-    dates = []
-    openPrices = []
-    closePrices = []
-    v_ma5 = []
-    volume = []
+    def __init__(self):
+        self.changePrices = []
+        self.dates = []
+        self.openPrices = []
+        self.closePrices = []
+        self.v_ma5 = []
+        self.volume = []
     def dict2obj(self, dict):
         #"""
         #summary:
@@ -153,7 +154,10 @@ def filterStock(samples, conditionday):
             bDn = sample.bollDn(conditionday)
             bUp = sample.bollUp(conditionday)
             yesterdayindex = sample.indexof(conditionday + timedelta(days=-1))
-            todayindex = yesterdayindex + 1
+            todayindex = sample.indexof(conditionday)
+            if(yesterdayindex == -1 or todayindex == -1):
+                yesterdayindex = sample.indexof(conditionday + timedelta(days=-2))
+                todayindex = sample.indexof(conditionday + timedelta(days=-1))
             if(yesterdayindex > -1 and todayindex > -1):
                 lastClose = sample.closePrices[yesterdayindex]
                 lastOpen = sample.openPrices[yesterdayindex]
@@ -201,8 +205,8 @@ def averageTPFP(targets, filter, conditionday, thres):
 stocks = []
 goodstocks = []
 
-#prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009', '6010', '6011', '6012', '6013', '6014', '6015', '6016', '6017',  '6018', '6019', '6030', '6031', '6032', '6033', '6034', '6035', '6036', '6037', '6038', '6039', '0020','0021','0022','0023','0024','0025','0026','0027','0028','0029']
-prefixes = ['6000','6001','6002','6003']
+prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009', '6010', '6011', '6012', '6013', '6014', '6015', '6016', '6017',  '6018', '6019', '6030', '6031', '6032', '6033', '6034', '6035', '6036', '6037', '6038', '6039', '0020','0021','0022','0023','0024','0025','0026','0027','0028','0029']
+#prefixes = ['6000','6001','6002','6003']
 Threshold = 0    
 stocks = fetchData(prefixes)
 today = date.today()
