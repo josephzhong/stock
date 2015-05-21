@@ -1,12 +1,12 @@
 # -*- coding:utf-8 -*-  
 import tushare as ts
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 import numpy as np
 import json
 from os.path import exists, join
 from string import split
 import threading
-import Queue, math, random
+import Queue, math, random, warnings,logging
 from multiprocessing.dummy import Pool as ThreadPool
 
 class Stock:
@@ -64,11 +64,15 @@ class Stock:
     def bollMd(self, day):
         result = 0
         indexend = self.indexof(day)
+        warnings.simplefilter("error")
         if(indexend > -1):
             indexstart = indexend - 20
             if (indexstart < 0):
                 indexstart = 0
-            result = np.mean(self.closePrices[indexstart:indexend])
+            if(indexend == indexstart):
+                result = self.closePrices[indexend]
+            else:
+                result = np.nanmean(self.closePrices[indexstart:indexend])
         return result
     def bollUp(self, day):
         result = 0
@@ -77,7 +81,10 @@ class Stock:
             indexstart = indexend - 20
             if (indexstart < 0):
                 indexstart = 0
-            std = np.std(self.closePrices[indexstart:indexend])
+            if(indexend == indexstart):
+                std = 0
+            else:
+                std = np.std(self.closePrices[indexstart:indexend])
             result = self.bollMd(day) + 2*std
         return result
     def bollDn(self, day):
@@ -87,7 +94,10 @@ class Stock:
             indexstart = indexend - 20
             if (indexstart < 0):
                 indexstart = 0
-            std = np.std(self.closePrices[indexstart:indexend])
+            if(indexend == indexstart):
+                std = 0
+            else:
+                std = np.std(self.closePrices[indexstart:indexend])
             result = self.bollMd(day) - 2*std
         return result
     def v_b(self, v_5, v_today):
@@ -130,7 +140,7 @@ def fetchDataOneThread(prefix):
         except Exception, e:
             print e
             if(str(e).find("list index out of range") > -1):
-                print str(e)
+                logging.warning(str(e))
             print stockId + " is not a valid stock.\n"
     return data
 
@@ -181,7 +191,7 @@ def fetchData(dataPrefix):
         data.extend(result)
     #fetchToday(data)
     return data
-
+#base on human experience
 def filterStock(samples, conditionday):
     result = []
     for sample in samples:
@@ -212,7 +222,90 @@ def filterStock(samples, conditionday):
                                     if(sample.checkIfHengPan(conditionday)):
                                         result.append(sample)
         except Exception, e:
-            print e
+            logging.warning("filterStock function: "  + str(e))
+    return result
+#base on machine learning
+def filterStock2(samples, conditionday):
+    result = []
+    for sample in samples:
+        try:
+            todayindex = sample.indexof(conditionday)
+            yesterdayindex = todayindex - 1
+            if(yesterdayindex > -1 and yesterdayindex > 20 and todayindex > 20 and todayindex < len(sample.dates)):
+                bMd = sample.bollMd(conditionday)
+                bUp = sample.bollUp(conditionday)
+                lastClose = sample.closePrices[yesterdayindex]
+                lastOpen = sample.openPrices[yesterdayindex]
+                thisChange = sample.changePrices[todayindex]
+                thisOpen = sample.openPrices[todayindex]
+                thisClose = sample.closePrices[todayindex]
+                thisV_b = sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])
+                if(bMd == 0.0 or bUp == 0.0):
+                    continue
+                lastClose_bMd = floatFormat((lastClose-bMd)/bMd)
+                lastOpen_bMd = floatFormat((lastOpen-bMd)/bMd)
+                lastClose_bUp = floatFormat((lastClose-bUp)/bUp)
+                lastOpen_bUp = floatFormat((lastOpen-bUp)/bUp)
+                thisChange = floatFormat(sample.changePrices[todayindex])
+                thisOpen_bUp = floatFormat((thisOpen-bUp)/bUp)
+                thisClose_bUp = floatFormat((thisClose-bUp)/bUp)
+                thisV_b = floatFormat(sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex]))
+                ifHengPan = sample.checkIfHengPan(conditionday)
+                if(lastClose_bUp=="BelowZero" and lastClose_bMd=="BelowZero" and lastOpen_bUp=="AboveZero" and lastOpen_bMd=="AboveZero" and thisChange=="AboveZero" and thisClose_bUp=="AboveZero" and thisV_b=="BelowZero" and ifHengPan==True):
+                    result.append(sample)
+                    continue
+                if(lastClose_bUp=="AboveZero" and lastOpen_bUp=="AboveZero" and thisChange=="AboveZero" and thisClose_bUp=="BelowZero" and thisV_b=="AboveZero" and ifHengPan==True):
+                    result.append(sample)
+                    continue
+        except Exception, e:
+                logging.warning("filterStock2 function: "  + str(e))
+    return result
+
+def filterStock3(samples, conditionday):
+    result = []
+    for sample in samples:
+        try:
+            todayindex = sample.indexof(conditionday)
+            yesterdayindex = todayindex - 1
+            if(yesterdayindex > -1 and yesterdayindex > 20 and todayindex > 20 and todayindex < len(sample.dates)):
+                bMd = sample.bollMd(conditionday)
+                bUp = sample.bollUp(conditionday)
+                lastClose = sample.closePrices[yesterdayindex]
+                lastOpen = sample.openPrices[yesterdayindex]
+                thisChange = sample.changePrices[todayindex]
+                thisOpen = sample.openPrices[todayindex]
+                thisClose = sample.closePrices[todayindex]
+                thisV_b = sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])
+                if(bMd == 0.0 or bUp == 0.0):
+                    continue
+                lastClose_bMd = floatFormat((lastClose-bMd)/bMd)
+                lastOpen_bMd = floatFormat((lastOpen-bMd)/bMd)
+                lastClose_bUp = floatFormat((lastClose-bUp)/bUp)
+                lastOpen_bUp = floatFormat((lastOpen-bUp)/bUp)
+                thisChange = floatFormat(sample.changePrices[todayindex])
+                thisOpen_bUp = floatFormat((thisOpen-bUp)/bUp)
+                thisClose_bUp = floatFormat((thisClose-bUp)/bUp)
+                thisV_b = floatFormat(sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex]))
+                ifHengPan = sample.checkIfHengPan(conditionday)
+                if(thisOpen_bUp=="BelowZero" and lastOpen_bUp=="BelowZero" and lastClose_bMd=="AboveZero" and lastOpen_bMd=="BelowZero" and thisClose_bUp=="AboveZero" and ifHengPan==True and lastClose_bUp=="AboveZero" and thisV_b=="AboveZero"):
+                    result.append(sample)
+                    continue
+                if(thisOpen_bUp=="BelowZero" and lastOpen_bUp=="AboveZero" and thisChange=="BelowZero" and lastClose_bMd=="AboveZero" and thisV_b=="AboveZero" and ifHengPan==True and lastClose_bUp=="BelowZero"):
+                    result.append(sample)
+                    continue
+                if(thisOpen_bUp=="BelowZero" and lastOpen_bUp=="AboveZero" and thisChange=="AboveZero" and thisClose_bUp=="BelowZero" and lastClose_bUp=="AboveZero" and thisV_b=="AboveZero" and ifHengPan==True):
+                    result.append(sample)
+                    continue
+                if(thisOpen_bUp=="BelowZero" and lastOpen_bUp=="AboveZero" and thisChange=="AboveZero" and thisClose_bUp=="AboveZero" and thisV_b=="BelowZero" and ifHengPan==True and lastClose_bMd=="BelowZero"):
+                    result.append(sample)
+                    continue
+                if(thisOpen_bUp=="AboveZero" and thisV_b=="AboveZero" and ifHengPan==True and thisChange=="BelowZero" and lastClose_bUp=="BelowZero" and lastOpen_bUp=="BelowZero" and lastClose_bMd=="AboveZero" and lastOpen_bMd=="BelowZero" and thisClose_bUp=="BelowZero"):
+                    result.append(sample)
+                    continue
+                if(thisOpen_bUp=="AboveZero" and thisV_b=="AboveZero" and ifHengPan==True and thisChange=="BelowZero" and lastClose_bUp=="BelowZero" and lastOpen_bUp=="AboveZero"):
+                    result.append(sample)
+        except Exception, e:
+                logging.warning("filterStock3 function: "  + str(e))
     return result
 
 def checkTPFP(positives, conditionday, thres):
@@ -238,35 +331,95 @@ def averageTPFP(targets, filter, conditionday, thres):
     for deltaday in deltadays:
         verifydays.append(conditionday - timedelta(days=deltaday))
     sum = [0.0, 0.0]
-    verifytimes = len(verifydays)
+    verifytimes = 0
     for day in verifydays:
         filteredstocks = filter(targets, day)
         tpfp = checkTPFP(filteredstocks, day, thres)
-        print "{0} TP/FP: {1[0]:.2%}/{1[1]:.2%}\n".format(day.isoformat(), tpfp)
+        logging.info("{0} TP/FP: {1[0]:.2%}/{1[1]:.2%}".format(day.isoformat(), tpfp))
         sum[0] += tpfp[0]
         sum[1] += tpfp[1]
-        if(tpfp[0] == 0.0 and tpfp[1] == 0.0):
-            verifytimes = verifytimes - 1
+        if(tpfp[0] != 0.0 or tpfp[1] != 0.0):
+            verifytimes += 1
     if(verifytimes == 0):
         return [0.0, 0.0]
     return [sum[0]/verifytimes, sum[1]/verifytimes]
-        
-stocks = []
-goodstocks = []
 
+def printGoodStock(stocks, filter):
+    goodstocks = []
+    today = date.today()
+    goodstocks = filter(stocks, today)
+    logging.info(filter.__name__ + " Good stocks: ")
+    if (len(goodstocks) == 0):
+        logging.info("No good stock found.")
+    for stock in goodstocks:
+        logging.info(u"{0}\t{1}\tlast day of data on {2}".format(stock.id, stock.name, stock.dates[len(stock.dates) - 1]))
+
+def verify(data, func, verifyday, thres):
+    verify = averageTPFP(data, func, verifyday, thres)
+    logging.info(func.__name__ + " Average TP/FP: {0[0]:.2%} / {0[1]:.2%}".format(verify))
+
+def floatFormat(num):
+    return float(int(num*1000))/1000
+
+def writeToJsonFileForTraining(dataArray):
+    file = open("stock.json", "w")
+    jsonobj = {}
+    
+    lastClose_bMds = []
+    lastOpen_bMds = []
+    lastClose_bUps = []
+    lastOpen_bUps = []
+    thisChanges = []
+    thisOpen_bUps = []
+    thisClose_bUps = []
+    thisV_bs = []
+    ifHengPans = []
+    results = []
+    
+    
+    for sample in dataArray:
+        for day in sample.dates:
+            conditionday = datetime.strptime(day, '%Y-%m-%d').date()
+            todayindex = sample.indexof(conditionday)
+            yesterdayindex = todayindex - 1
+            nextdayindex = todayindex + 1
+            if(yesterdayindex > -1 and nextdayindex < len(sample.dates) and yesterdayindex > 20 and todayindex > 20):
+                bMd = sample.bollMd(conditionday)
+                bUp = sample.bollUp(conditionday)
+                lastClose = sample.closePrices[yesterdayindex]
+                lastOpen = sample.openPrices[yesterdayindex]
+                thisChange = sample.changePrices[todayindex]
+                thisOpen = sample.openPrices[todayindex]
+                thisClose = sample.closePrices[todayindex]
+                thisV_b = sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])
+                if(bMd == 0.0 or bUp == 0.0):
+                    continue
+                lastClose_bMds.append(floatFormat((lastClose-bMd)/bMd))
+                lastOpen_bMds.append(floatFormat((lastOpen-bMd)/bMd))
+                lastClose_bUps.append(floatFormat((lastClose-bUp)/bUp))
+                lastOpen_bUps.append(floatFormat((lastOpen-bUp)/bUp))
+                thisChanges.append(floatFormat(sample.changePrices[todayindex]))
+                thisOpen_bUps.append(floatFormat((thisOpen-bUp)/bUp))
+                thisClose_bUps.append(floatFormat((thisClose-bUp)/bUp))
+                thisV_bs.append(floatFormat(sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])))
+                ifHengPans.append(sample.checkIfHengPan(conditionday))
+                results.append(sample.changePrices[nextdayindex] > 0.03 )
+    jsonobj = {"result": results, "lastClose_bMd": lastClose_bMds, "lastOpen_bMd": lastOpen_bMds, "lastClose_bUp": lastClose_bUps, "lastOpen_bUp": lastOpen_bUps, "thisChange": thisChanges, "thisOpen_bUp": thisOpen_bUps, "thisClose_bUp": thisClose_bUps, "thisV_b": thisV_bs, "ifHengPan": ifHengPans}
+    jsonstr = json.dumps(jsonobj, separators=(",", ": "))
+    file.write(jsonstr)
+    file.close()
+    
 prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009', '6010', '6011', '6012', '6013', '6014', '6015', '6016', '6017',  '6018', '6019', '6030', '6031', '6032', '6033', '6034', '6035', '6036', '6037', '6038', '6039', '0020','0021','0022','0023','0024','0025','0026','0027','0028','0029']
-#prefixes = ['6003']
-Threshold = 0
+#prefixes = ['60030']
+
+logging.basicConfig(filename= datetime.now().strftime("%Y_%m_%d_%H_%M_%S")+ '.log',level=logging.DEBUG)
 stocks = fetchData(prefixes)
-today = date.today()
-goodstocks = filterStock(stocks, today)
-print "Good stocks: "
-if (len(goodstocks) == 0):
-    print "No good stock found.\n"
-for stock in goodstocks:
-    print u"{0}\t{1}\tlast day of data on {2}\n".format(stock.id, stock.name, stock.dates[len(stock.dates) - 1])
 
-verify = averageTPFP(stocks, filterStock, today, Threshold)
-print "Average TP/FP: {0[0]:.2%} / {0[1]:.2%}\n".format(verify)
-
-
+printGoodStock(stocks, filterStock)
+verify(stocks, filterStock, date.today(), 0.0)
+printGoodStock(stocks, filterStock2)
+verify(stocks, filterStock2, date.today(), 0.0)
+printGoodStock(stocks, filterStock3)
+verify(stocks, filterStock3, date.today(), 0.0)
+writeToJsonFileForTraining(stocks)
+logging.shutdown()

@@ -1,4 +1,4 @@
-import unittest
+import unittest, json
 from c45 import *
 
 

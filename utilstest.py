@@ -7,6 +7,7 @@ class TestDataMinig(unittest.TestCase):
 
     def setUp(self):
         self.table = json.loads(open('table.json').read())
+        self.maxDiff = None
 
     def test_is_mono(self):
         testlist = ['yes', 'yes', 'yes', 'yes']
@@ -60,14 +61,14 @@ class TestDataMinig(unittest.TestCase):
     def test_get_subtables(self):
         expected = [
         {   'result': ['yes', 'no'],
-            'arg1': ['left', 'left'],
-            'arg2': ['down', 'up'],
-            'arg3': ['no', 'yes'],
-        },
-        {   'result': ['yes', 'no'],
             'arg1': ['right', 'right'],
             'arg2': ['down', 'down'],
             'arg3': ['yes', 'no'],
+        },
+        {   'result': ['yes', 'no'],
+            'arg1': ['left', 'left'],
+            'arg2': ['down', 'up'],
+            'arg3': ['no', 'yes'],
         }]
         self.assertEquals(utils.get_subtables(self.table, 'arg1'), expected)
         
