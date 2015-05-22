@@ -118,6 +118,48 @@ class Stock:
                     return False
             return True
         return False
+    
+class stockView:
+    def __init__(self):
+        self.lastClose_bMd = 0.0
+        self.lastOpen_bMd = 0.0
+        self.lastClose_bUp = 0.0
+        self.lastOpen_bUp = 0.0
+        self.thisChange = 0.0
+        self.thisOpen_bUp = 0.0
+        self.thisClose_bUp = 0.0
+        self.thisV_b = 0.0
+        self.ifHengPan = 0
+        self.result = 0.0
+    def fromStock(self, sample, conditionday):
+        todayindex = sample.indexof(conditionday)
+        yesterdayindex = todayindex - 1
+        nextdayindex = todayindex + 1
+        if(yesterdayindex > -1 and nextdayindex < len(sample.dates) and yesterdayindex > 20 and todayindex > 20):
+            bMd = sample.bollMd(conditionday)
+            bUp = sample.bollUp(conditionday)
+            lastClose = sample.closePrices[yesterdayindex]
+            lastOpen = sample.openPrices[yesterdayindex]
+            thisChange = sample.changePrices[todayindex]
+            thisOpen = sample.openPrices[todayindex]
+            thisClose = sample.closePrices[todayindex]
+            thisV_b = sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])
+            if(bMd == 0.0 or bUp == 0.0):
+                return None
+            self.lastClose_bMd = floatFormat((lastClose-bMd)/bMd)
+            self.lastOpen_bMd = floatFormat((lastOpen-bMd)/bMd)
+            self.lastClose_bUp = floatFormat((lastClose-bUp)/bUp)
+            self.lastOpen_bUp = floatFormat((lastOpen-bUp)/bUp)
+            self.thisChange = floatFormat(sample.changePrices[todayindex])
+            self.thisOpen_bUp = floatFormat((thisOpen-bUp)/bUp)
+            self.thisClose_bUp = floatFormat((thisClose-bUp)/bUp)
+            self.thisV_b = floatFormat(sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex]))
+            self.ifHengPan = boolToInt(sample.checkIfHengPan(conditionday))
+            self.result = int(sample.changePrices[nextdayindex]*100)
+            return self
+        else:
+            return None
+    
 
 def fetchDataOneThread(prefix):
     today = date.today()
@@ -358,6 +400,12 @@ def verify(data, func, verifyday, thres):
     verify = averageTPFP(data, func, verifyday, thres)
     logging.info(func.__name__ + " Average TP/FP: {0[0]:.2%} / {0[1]:.2%}".format(verify))
 
+def boolToInt(bool):
+    if(bool):
+        return 1
+    else:
+        return 0
+    
 def floatFormat(num):
     return float(int(num*1000))/1000
 
@@ -409,17 +457,59 @@ def writeToJsonFileForTraining(dataArray):
     file.write(jsonstr)
     file.close()
     
+def writeToArffFile(dataArray):
+    file = open("stock.arff", "w")
+    jsonobj = {}
+    
+    lastClose_bMds = []
+    lastOpen_bMds = []
+    lastClose_bUps = []
+    lastOpen_bUps = []
+    thisChanges = []
+    thisOpen_bUps = []
+    thisClose_bUps = []
+    thisV_bs = []
+    ifHengPans = []
+    results = []
+    
+    file.write("@relation stock\n")
+    file.write("\n")
+    dataexample = stockView()
+    memberlist = [m for m in dir(dataexample)]
+    attrs = []
+    for m in memberlist:
+        if m[0] != "_" and not callable(getattr(dataexample,m)):
+            attrs.append(m)
+    for attr in attrs:
+        file.write("@attribute {0} numeric\n".format(attr))
+    file.write("\n")
+    file.write("@data\n")
+    indexes = range(len(attrs))
+    for sample in dataArray:
+        for day in sample.dates:
+            conditionday = datetime.strptime(day, '%Y-%m-%d').date()
+            data = stockView().fromStock(sample, conditionday)
+            if(data != None):
+                attrvalues = []
+                for attr in attrs:
+                    attrvalues.append(getattr(data, attr))
+                datastr = ""
+                for idx in indexes:
+                    datastr += "{0} {1}, ".format(idx, attrvalues[idx])
+                file.write("{{{0}}}\n".format(datastr[:-2]))
+    file.close()
+
 prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009', '6010', '6011', '6012', '6013', '6014', '6015', '6016', '6017',  '6018', '6019', '6030', '6031', '6032', '6033', '6034', '6035', '6036', '6037', '6038', '6039', '0020','0021','0022','0023','0024','0025','0026','0027','0028','0029']
 #prefixes = ['60030']
 
 logging.basicConfig(filename= datetime.now().strftime("%Y_%m_%d_%H_%M_%S")+ '.log',level=logging.DEBUG)
 stocks = fetchData(prefixes)
-
-printGoodStock(stocks, filterStock)
-verify(stocks, filterStock, date.today(), 0.0)
-printGoodStock(stocks, filterStock2)
-verify(stocks, filterStock2, date.today(), 0.0)
-printGoodStock(stocks, filterStock3)
-verify(stocks, filterStock3, date.today(), 0.0)
-writeToJsonFileForTraining(stocks)
+writeToArffFile(stocks)
+#printGoodStock(stocks, filterStock)
+#verify(stocks, filterStock, date.today(), 0.0)
+#printGoodStock(stocks, filterStock2)
+#verify(stocks, filterStock2, date.today(), 0.0)
+#printGoodStock(stocks, filterStock3)
+#verify(stocks, filterStock3, date.today(), 0.0)
+#writeToJsonFileForTraining(stocks)
 logging.shutdown()
