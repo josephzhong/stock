@@ -101,8 +101,8 @@ class Stock:
             result = self.bollMd(day) - 2*std
         return result
     def v_b(self, v_5, v_today):
-        if (v_5 == 0):
-            return 0
+        if (v_5 == 0.0):
+            return 0.0
         else:
             return v_today/v_5
     def checkIfHengPan(self, currentday):
@@ -130,7 +130,7 @@ class stockView:
         self.thisClose_bUp = 0.0
         self.thisV_b = 0.0
         self.ifHengPan = 0
-        self.result = 0.0
+        self.result = "GoDown"
     def fromStock(self, sample, conditionday):
         todayindex = sample.indexof(conditionday)
         yesterdayindex = todayindex - 1
@@ -155,7 +155,10 @@ class stockView:
             self.thisClose_bUp = floatFormat((thisClose-bUp)/bUp)
             self.thisV_b = floatFormat(sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex]))
             self.ifHengPan = boolToInt(sample.checkIfHengPan(conditionday))
-            self.result = int(sample.changePrices[nextdayindex]*100)
+            if(sample.changePrices[nextdayindex] > 0.03):
+                self.result = "GoUp"
+            else:
+                self.result = "GoDown"
             return self
         else:
             return None
@@ -349,6 +352,107 @@ def filterStock3(samples, conditionday):
         except Exception, e:
                 logging.warning("filterStock3 function: "  + str(e))
     return result
+#first filter using machine learning
+def wekafilter(samples, conditionday):
+    result = []
+    for sample in samples:
+        try:
+            todayindex = sample.indexof(conditionday)
+            yesterdayindex = todayindex - 1
+            if(yesterdayindex > -1 and yesterdayindex > 20 and todayindex > 20 and todayindex < len(sample.dates)):
+                bMd = sample.bollMd(conditionday)
+                bUp = sample.bollUp(conditionday)
+                lastClose = sample.closePrices[yesterdayindex]
+                lastOpen = sample.openPrices[yesterdayindex]
+                thisChange = sample.changePrices[todayindex]
+                thisOpen = sample.openPrices[todayindex]
+                thisClose = sample.closePrices[todayindex]
+                thisV_b = sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])
+                if(bMd == 0.0 or bUp == 0.0):
+                    continue
+                lastClose_bMd = (lastClose-bMd)/bMd
+                lastOpen_bMd = (lastOpen-bMd)/bMd
+                lastClose_bUp = (lastClose-bUp)/bUp
+                lastOpen_bUp = (lastOpen-bUp)/bUp
+                thisChange = sample.changePrices[todayindex]
+                thisOpen_bUp = (thisOpen-bUp)/bUp
+                thisClose_bUp = (thisClose-bUp)/bUp
+                thisV_b = sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])
+                ifHengPan = sample.checkIfHengPan(conditionday)
+                thisClose_bUp <= -0.188
+                GoUp = 0.0
+                if (thisChange <= -0.038):
+                    if (thisChange <= -0.07):
+                        if (thisClose_bUp > -0.208):
+                            if (thisClose_bUp > -0.202):
+                                if (lastClose_bMd <= -0.017): 
+                                    GoUp = (3.0)
+                    if (thisChange > -0.07):
+                        if (thisChange <= -0.063):
+                            if (ifHengPan <= 0):
+                                if (thisChange > -0.065):
+                                    if (thisChange > -0.064):
+                                        if (lastClose_bUp > -0.14): 
+                                            GoUp = (2.0)
+                if (thisChange > -0.038):
+                    if (ifHengPan <= 0):
+                        if (thisV_b > 0.973):
+                            if (lastClose_bUp <= -0.662):
+                                if (thisClose_bUp <= -0.669):
+                                    if (lastOpen_bUp <= -0.778): 
+                                        GoUp = (8.0/1.0)
+                                if (thisClose_bUp > -0.669): 
+                                    GoUp = (20.0/3.0)
+                    if (ifHengPan > 0):
+                        if (thisOpen_bUp <= -0.186):
+                            if (lastOpen_bUp <= -0.206):
+                                if (thisChange <= 0.01):
+                                    if (thisChange <= -0.021):
+                                        if (thisV_b > 0.765):
+                                            if (lastOpen_bMd <= -0.094):
+                                                if (thisChange <= -0.023):
+                                                    if (thisChange <= -0.027):
+                                                        if (thisV_b <= 1.007): 
+                                                            GoUp = (5.0/1.0)
+                                                if (thisChange > -0.023): 
+                                                    GoUp = (3.0)
+                                            if (lastOpen_bMd > -0.094): 
+                                                GoUp = (4.0)
+                                if (thisChange > 0.01):
+                                    if (thisChange <= 0.018):
+                                        if (thisOpen_bUp <= -0.224): 
+                                            GoUp = (29.0/9.0)
+                            if (lastOpen_bUp > -0.206):
+                                if (lastOpen_bMd <= -0.06):
+                                    if (lastOpen_bUp > -0.176):
+                                        if (thisV_b <= 0.871):
+                                            if (lastClose_bUp > -0.209):
+                                                if (lastClose_bMd <= -0.091): 
+                                                    GoUp = (7.0)
+                                        if (thisV_b > 0.871): 
+                                            GoUp = (19.0)
+                                if (lastOpen_bMd > -0.06):
+                                    if (lastClose_bMd > 0.124):
+                                        if (thisOpen_bUp <= -0.314): 
+                                            GoUp = (11.0/1.0)
+                        if (thisOpen_bUp > -0.186):
+                            if (lastOpen_bUp > -0.166):
+                                if (thisV_b <= 1.079):
+                                    if (lastClose_bMd <= -0.032):
+                                        if (lastOpen_bUp <= -0.14):
+                                            if (lastClose_bMd <= -0.072):
+                                                if (lastOpen_bMd > -0.066): 
+                                                    GoUp = (6.0/1.0)
+                                    if (lastClose_bMd > -0.032): 
+                                        GoUp = (3.0)
+                                if (thisV_b > 1.079): 
+                                    GoUp = (4.0)
+                
+                if (GoUp != 0.0 and 1/GoUp < 0.2):
+                    result.append(sample)
+        except Exception, e:
+                logging.warning("filterStock3 function: "  + str(e))
+    return result
 
 def checkTPFP(positives, conditionday, thres):
     tpositives = 0
@@ -481,10 +585,11 @@ def writeToArffFile(dataArray):
         if m[0] != "_" and not callable(getattr(dataexample,m)):
             attrs.append(m)
     for attr in attrs:
-        file.write("@attribute {0} numeric\n".format(attr))
+        if(attr != "result"):
+            file.write("@attribute {0} numeric\n".format(attr))
+    file.write("@attribute {0} string\n".format("result"))
     file.write("\n")
     file.write("@data\n")
-    indexes = range(len(attrs))
     for sample in dataArray:
         for day in sample.dates:
             conditionday = datetime.strptime(day, '%Y-%m-%d').date()
@@ -492,10 +597,12 @@ def writeToArffFile(dataArray):
             if(data != None):
                 attrvalues = []
                 for attr in attrs:
-                    attrvalues.append(getattr(data, attr))
+                    if(attr != "result"):
+                        attrvalues.append(getattr(data, attr))
                 datastr = ""
-                for idx in indexes:
-                    datastr += "{0} {1}, ".format(idx, attrvalues[idx])
+                for idx, value in enumerate(attrvalues):
+                    datastr += "{0} {1}, ".format(idx, value)
+                datastr += "{0} {1}, ".format(len(attrvalues), getattr(data, "result"))
                 file.write("{{{0}}}\n".format(datastr[:-2]))
     file.close()
 
@@ -504,7 +611,7 @@ prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009
 
 logging.basicConfig(filename= datetime.now().strftime("%Y_%m_%d_%H_%M_%S")+ '.log',level=logging.DEBUG)
 stocks = fetchData(prefixes)
-writeToArffFile(stocks)
+#writeToArffFile(stocks)
 #printGoodStock(stocks, filterStock)
 #verify(stocks, filterStock, date.today(), 0.0)
 #printGoodStock(stocks, filterStock2)
@@ -512,4 +619,6 @@ writeToArffFile(stocks)
 #printGoodStock(stocks, filterStock3)
 #verify(stocks, filterStock3, date.today(), 0.0)
 #writeToJsonFileForTraining(stocks)
+printGoodStock(stocks, wekafilter)
+verify(stocks, wekafilter, date.today(), 0.0)
 logging.shutdown()
