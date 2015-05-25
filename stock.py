@@ -18,6 +18,7 @@ class Stock:
         self.v_ma5 = []
         self.volume = []
         self.name = u""
+        self.score = 0.0
     def dict2obj(self, dict):
         #"""
         #summary:
@@ -454,7 +455,8 @@ def wekafilter(samples, conditionday):
                                 if (thisV_b > 1.079): 
                                     GoUp = (4.0)
                 
-                if (GoUp != 0.0 and 1/GoUp < 0.2):
+                if (GoUp > 0.0):
+                    sample.score = GoUp
                     result.append(sample)
         except Exception, e:
                 logging.warning("filterStock3 function: "  + str(e))
@@ -503,8 +505,16 @@ def printGoodStock(stocks, filter):
     logging.info(filter.__name__ + " Good stocks: ")
     if (len(goodstocks) == 0):
         logging.info("No good stock found.")
+    for idx1, data1 in enumerate(goodstocks):
+        if(idx1 < len(goodstocks) - 1 ):
+            for idx2, data2 in enumerate(goodstocks[idx1:]):
+                if(idx2 < len(goodstocks) - 1):
+                    if(goodstocks[idx2].score < goodstocks[idx2 + 1].score):
+                        temp = goodstocks[idx2]
+                        goodstocks[idx2] = goodstocks[idx2 + 1]
+                        goodstocks[idx2 + 1] = temp
     for stock in goodstocks:
-        logging.info(u"{0}\t{1}\tlast day of data on {2}".format(stock.id, stock.name, stock.dates[len(stock.dates) - 1]))
+        logging.info(u"{0}\t{1}\t{2}\tlast day of data on {3}".format(stock.id, stock.name, stock.score, stock.dates[len(stock.dates) - 1]))
 
 def verify(data, func, verifyday, thres):
     verify = averageTPFP(data, func, verifyday, thres)
@@ -618,7 +628,7 @@ prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009
 
 logging.basicConfig(filename= datetime.now().strftime("%Y_%m_%d_%H_%M_%S")+ '.log',level=logging.DEBUG)
 stocks = fetchData(prefixes)
-writeToArffFile(stocks)
+#writeToArffFile(stocks)
 #printGoodStock(stocks, filterStock)
 #verify(stocks, filterStock, date.today(), 0.0)
 #printGoodStock(stocks, filterStock2)
@@ -626,6 +636,6 @@ writeToArffFile(stocks)
 #printGoodStock(stocks, filterStock3)
 #verify(stocks, filterStock3, date.today(), 0.0)
 #writeToJsonFileForTraining(stocks)
-#printGoodStock(stocks, wekafilter)
-#verify(stocks, wekafilter, date.today(), 0.0)
+printGoodStock(stocks, wekafilter)
+verify(stocks, wekafilter, date.today(), 0.0)
 logging.shutdown()
