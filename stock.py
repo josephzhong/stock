@@ -155,10 +155,16 @@ class stockView:
             self.thisClose_bUp = floatFormat((thisClose-bUp)/bUp)
             self.thisV_b = floatFormat(sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex]))
             self.ifHengPan = boolToInt(sample.checkIfHengPan(conditionday))
-            if(sample.changePrices[nextdayindex] > 0.03):
-                self.result = "GoUp"
+            if(sample.changePrices[nextdayindex] > 0.05):
+                self.result = "High"
             else:
-                self.result = "GoDown"
+                if(sample.changePrices[nextdayindex] >=0 and sample.changePrices[nextdayindex] <= 0.05):
+                    self.result = "Low"
+                else:
+                    if(sample.changePrices[nextdayindex] < 0 and sample.changePrices[nextdayindex] >= -0.05):
+                        self.result = "MinusLow"
+                    else:
+                        self.result = "MinusHigh"
             return self
         else:
             return None
@@ -166,7 +172,7 @@ class stockView:
 
 def fetchDataOneThread(prefix):
     today = date.today()
-    startday = today - timedelta(days=90)
+    startday = today - timedelta(days=365*3)
     data = []
     for index in range(pow(10,(6-len(prefix)))):
         suffix = str(index).zfill(6-len(prefix))
@@ -587,10 +593,15 @@ def writeToArffFile(dataArray):
     for attr in attrs:
         if(attr != "result"):
             file.write("@attribute {0} numeric\n".format(attr))
-    file.write("@attribute {0} string\n".format("result"))
+    file.write("@attribute {0} {{High, Low, MinusHigh, MinusLow}}\n".format("result"))
     file.write("\n")
     file.write("@data\n")
-    for sample in dataArray:
+    total = len(dataArray)
+    prog = 1
+    for idx, sample in enumerate(dataArray):
+        if(idx*100/total == prog):
+            print "Output: {0}%\n".format(prog)
+            prog +=1
         for day in sample.dates:
             conditionday = datetime.strptime(day, '%Y-%m-%d').date()
             data = stockView().fromStock(sample, conditionday)
@@ -599,11 +610,7 @@ def writeToArffFile(dataArray):
                 for attr in attrs:
                     if(attr != "result"):
                         attrvalues.append(getattr(data, attr))
-                datastr = ""
-                for idx, value in enumerate(attrvalues):
-                    datastr += "{0} {1}, ".format(idx, value)
-                datastr += "{0} {1}, ".format(len(attrvalues), getattr(data, "result"))
-                file.write("{{{0}}}\n".format(datastr[:-2]))
+                file.write("{{0 {0[0]}, 1 {0[1]}, 2 {0[2]}, 3 {0[3]}, 4 {0[4]}, 5 {0[5]}, 6 {0[6]}, 7 {0[7]}, 8 {0[8]}, 9 {1}}}\n".format(attrvalues, data.result))
     file.close()
 
 prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009', '6010', '6011', '6012', '6013', '6014', '6015', '6016', '6017',  '6018', '6019', '6030', '6031', '6032', '6033', '6034', '6035', '6036', '6037', '6038', '6039', '0020','0021','0022','0023','0024','0025','0026','0027','0028','0029']
@@ -611,7 +618,7 @@ prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009
 
 logging.basicConfig(filename= datetime.now().strftime("%Y_%m_%d_%H_%M_%S")+ '.log',level=logging.DEBUG)
 stocks = fetchData(prefixes)
-#writeToArffFile(stocks)
+writeToArffFile(stocks)
 #printGoodStock(stocks, filterStock)
 #verify(stocks, filterStock, date.today(), 0.0)
 #printGoodStock(stocks, filterStock2)
@@ -619,6 +626,6 @@ stocks = fetchData(prefixes)
 #printGoodStock(stocks, filterStock3)
 #verify(stocks, filterStock3, date.today(), 0.0)
 #writeToJsonFileForTraining(stocks)
-printGoodStock(stocks, wekafilter)
-verify(stocks, wekafilter, date.today(), 0.0)
+#printGoodStock(stocks, wekafilter)
+#verify(stocks, wekafilter, date.today(), 0.0)
 logging.shutdown()
