@@ -8,7 +8,7 @@ from string import split
 import threading
 import Queue, math, random, warnings,logging
 from multiprocessing.dummy import Pool as ThreadPool
-
+from tree import tree1
 class Stock:
     def __init__(self):
         self.changePrices = []
@@ -173,7 +173,7 @@ class stockView:
 
 def fetchDataOneThread(prefix):
     today = date.today()
-    startday = today - timedelta(days=365)
+    startday = today - timedelta(days=120)
     data = []
     for index in range(pow(10,(6-len(prefix)))):
         suffix = str(index).zfill(6-len(prefix))
@@ -494,8 +494,8 @@ def tree1filter(samples, conditionday):
                 thisV_b = sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])
                 ifHengPan = sample.checkIfHengPan(conditionday)
 
-                #score = tree1(sample, lastClose_bMd, lastOpen_bMd, lastClose_bUp, lastOpen_bUp, thisChange, thisOpen_bUp, thisClose_bUp, thisV_b, ifHengPan)
-                if(score > 0.0):
+                score = tree1(sample, lastClose_bMd, lastOpen_bMd, lastClose_bUp, lastOpen_bUp, thisChange, thisOpen_bUp, thisClose_bUp, thisV_b, ifHengPan)
+                if(score > 3.0):
                     sample.score = score
                     result.append(sample)
         except Exception, e:
@@ -669,7 +669,7 @@ prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009
 
 logging.basicConfig(filename= datetime.now().strftime("%Y_%m_%d_%H_%M_%S")+ '.log',level=logging.DEBUG)
 stocks = fetchData(prefixes)
-writeToArffFile(stocks)
+#writeToArffFile(stocks)
 #printGoodStock(stocks, filterStock)
 #verify(stocks, filterStock, date.today(), 0.0)
 #printGoodStock(stocks, filterStock2)
@@ -679,4 +679,6 @@ writeToArffFile(stocks)
 #writeToJsonFileForTraining(stocks)
 #printGoodStock(stocks, wekafilter)
 #verify(stocks, wekafilter, date.today(), 0.0)
+printGoodStock(stocks, tree1filter)
+verify(stocks, tree1filter, date.today(), 0.0)
 logging.shutdown()

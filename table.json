@@ -1,6 +1,0 @@
-{
-    "result": ["yes", "no", "yes", "no"],
-    "arg1": ["left", "left", "right", "right"],
-    "arg2": ["down", "up", "down", "down"],
-    "arg3": ["no", "yes", "yes", "no"]
-}
