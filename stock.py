@@ -173,7 +173,7 @@ class stockView:
 
 def fetchDataOneThread(prefix):
     today = date.today()
-    startday = today - timedelta(days=365*3)
+    startday = today - timedelta(days=365)
     data = []
     for index in range(pow(10,(6-len(prefix)))):
         suffix = str(index).zfill(6-len(prefix))
@@ -386,7 +386,6 @@ def wekafilter(samples, conditionday):
                 thisClose_bUp = (thisClose-bUp)/bUp
                 thisV_b = sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])
                 ifHengPan = sample.checkIfHengPan(conditionday)
-                thisClose_bUp <= -0.188
                 GoUp = 0.0
                 if (thisChange <= -0.038):
                     if (thisChange <= -0.07):
@@ -461,6 +460,48 @@ def wekafilter(samples, conditionday):
         except Exception, e:
                 logging.warning("filterStock3 function: "  + str(e))
     return result
+
+#first filter using machine learning
+def tree1filter(samples, conditionday):
+    result = []
+    total = len(samples)
+    prog = 0
+    for idx, sample in enumerate(samples):
+        if((idx+1)*100/total == prog):
+            print "filtering stock {0}%".format((idx+1)*100/total)
+            prog += 1
+        try:
+            todayindex = sample.indexof(conditionday)
+            yesterdayindex = todayindex - 1
+            if(yesterdayindex > -1 and yesterdayindex > 20 and todayindex > 20 and todayindex < len(sample.dates)):
+                bMd = sample.bollMd(conditionday)
+                bUp = sample.bollUp(conditionday)
+                lastClose = sample.closePrices[yesterdayindex]
+                lastOpen = sample.openPrices[yesterdayindex]
+                thisChange = sample.changePrices[todayindex]
+                thisOpen = sample.openPrices[todayindex]
+                thisClose = sample.closePrices[todayindex]
+                thisV_b = sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])
+                if(bMd == 0.0 or bUp == 0.0):
+                    continue
+                lastClose_bMd = (lastClose-bMd)/bMd
+                lastOpen_bMd = (lastOpen-bMd)/bMd
+                lastClose_bUp = (lastClose-bUp)/bUp
+                lastOpen_bUp = (lastOpen-bUp)/bUp
+                thisChange = sample.changePrices[todayindex]
+                thisOpen_bUp = (thisOpen-bUp)/bUp
+                thisClose_bUp = (thisClose-bUp)/bUp
+                thisV_b = sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])
+                ifHengPan = sample.checkIfHengPan(conditionday)
+
+                #score = tree1(sample, lastClose_bMd, lastOpen_bMd, lastClose_bUp, lastOpen_bUp, thisChange, thisOpen_bUp, thisClose_bUp, thisV_b, ifHengPan)
+                if(score > 0.0):
+                    sample.score = score
+                    result.append(sample)
+        except Exception, e:
+                logging.warning("tree1filter function: "  + str(e))
+    return result
+
 
 def checkTPFP(positives, conditionday, thres):
     tpositives = 0
@@ -607,10 +648,10 @@ def writeToArffFile(dataArray):
     file.write("\n")
     file.write("@data\n")
     total = len(dataArray)
-    prog = 1
+    prog = 0
     for idx, sample in enumerate(dataArray):
-        if(idx*100/total == prog):
-            print "Output: {0}%\n".format(prog)
+        if((idx+1)*100/total == prog):
+            print "{0}\tOutput: {1}%\n".format(datetime.now().strftime("%d %b %Y %H:%M:%S"), prog)
             prog +=1
         for day in sample.dates:
             conditionday = datetime.strptime(day, '%Y-%m-%d').date()
@@ -628,7 +669,7 @@ prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009
 
 logging.basicConfig(filename= datetime.now().strftime("%Y_%m_%d_%H_%M_%S")+ '.log',level=logging.DEBUG)
 stocks = fetchData(prefixes)
-#writeToArffFile(stocks)
+writeToArffFile(stocks)
 #printGoodStock(stocks, filterStock)
 #verify(stocks, filterStock, date.today(), 0.0)
 #printGoodStock(stocks, filterStock2)
@@ -636,6 +677,6 @@ stocks = fetchData(prefixes)
 #printGoodStock(stocks, filterStock3)
 #verify(stocks, filterStock3, date.today(), 0.0)
 #writeToJsonFileForTraining(stocks)
-printGoodStock(stocks, wekafilter)
-verify(stocks, wekafilter, date.today(), 0.0)
+#printGoodStock(stocks, wekafilter)
+#verify(stocks, wekafilter, date.today(), 0.0)
 logging.shutdown()
