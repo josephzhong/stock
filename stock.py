@@ -7,8 +7,9 @@ from os.path import exists, join
 from string import split
 import threading
 import Queue, math, random, warnings,logging
+from functools import partial
 from multiprocessing.dummy import Pool as ThreadPool
-from tree import tree1
+#from tree import tree1
 class Stock:
     def __init__(self):
         self.changePrices = []
@@ -43,7 +44,19 @@ class Stock:
                 self.changePrices.append(0.0)
             else:
                 self.changePrices.append((self.closePrices[idx] - self.openPrices[idx])/self.openPrices[idx])
-    
+    def calc_v_ma5(self):
+        for idx, date in enumerate(self.dates):
+            vma5 = 0.0
+            if(idx >= 5 and len(self.volume[0:idx]) > 0):
+                vma5 = np.nanmean(self.volume[idx-5:idx])
+            else:
+                if(len(self.volume[0:idx]) == 0):
+                    vma5 = self.volume[0]
+                else:
+                    vma5 = np.nanmean(self.volume[0:idx])
+            if(math.isnan(vma5)):
+                vma5 = 0.0
+            self.v_ma5.append(vma5)
     def indexof(self, day):
         for idx, d in enumerate(self.dates):
             if(d == day.isoformat()):
@@ -63,42 +76,45 @@ class Stock:
                 return idx
         return -1
     def bollMd(self, day):
-        result = 0
+        result = 0.0
         indexend = self.indexof(day)
-        warnings.simplefilter("error")
         if(indexend > -1):
             indexstart = indexend - 20
             if (indexstart < 0):
                 indexstart = 0
-            if(indexend == indexstart):
+            if(len(self.closePrices[indexstart:indexend]) == 0):
                 result = self.closePrices[indexend]
             else:
                 result = np.nanmean(self.closePrices[indexstart:indexend])
+            if(math.isnan(result)):
+                result = 0.0
         return result
     def bollUp(self, day):
-        result = 0
+        result = 0.0
         indexend = self.indexof(day)
         if(indexend > -1):
             indexstart = indexend - 20
             if (indexstart < 0):
                 indexstart = 0
-            if(indexend == indexstart):
-                std = 0
-            else:
+            std = 0.0
+            if(len(self.closePrices[indexstart:indexend]) > 0):
                 std = np.std(self.closePrices[indexstart:indexend])
+            if(math.isnan(std)):
+                std = 0.0
             result = self.bollMd(day) + 2*std
         return result
     def bollDn(self, day):
-        result = 0
+        result = 0.0
         indexend = self.indexof(day)
         if(indexend > -1):
             indexstart = indexend - 20
             if (indexstart < 0):
                 indexstart = 0
-            if(indexend == indexstart):
-                std = 0
-            else:
+            std = 0.0
+            if(len(self.closePrices[indexstart:indexend]) > 0):
                 std = np.std(self.closePrices[indexstart:indexend])
+            if(math.isnan(std)):
+                std = 0.0
             result = self.bollMd(day) - 2*std
         return result
     def v_b(self, v_5, v_today):
@@ -171,7 +187,7 @@ class stockView:
             return None
     
 
-def fetchDataOneThread(prefix):
+def fetchDataOneThread(prefix, startday, endday):
     today = date.today()
     startday = today - timedelta(days=120)
     data = []
@@ -179,7 +195,7 @@ def fetchDataOneThread(prefix):
         suffix = str(index).zfill(6-len(prefix))
         stockId = prefix + suffix
         try:    
-            result = ts.get_hist_data(stockId, start=startday.isoformat(),end=today.isoformat())
+            result = ts.get_hist_data(stockId, start=startday.isoformat(),end=endday.isoformat())
             stock = Stock()
             stock.id = stockId
             stock.dates = result.index.tolist()
@@ -187,6 +203,34 @@ def fetchDataOneThread(prefix):
             stock.closePrices = result.close.values.tolist()
             stock.v_ma5 = result.v_ma5.values.tolist()
             stock.volume = result.volume.tolist()
+            stock.PChange()
+            data.append(stock)
+        except Exception, e:
+            print e
+            if(str(e).find("list index out of range") > -1):
+                logging.warning(str(e))
+            print stockId + " is not a valid stock.\n"
+    return data
+
+#前复权
+def fetchDataOneThreadwithFQ(prefix, startday, endday):
+    today = date.today()
+    startday = today - timedelta(days=120)
+    data = []
+    for index in range(pow(10,(6-len(prefix)))):
+        suffix = str(index).zfill(6-len(prefix))
+        stockId = prefix + suffix
+        try:    
+            result = ts.get_h_data(stockId, start=startday.isoformat(),end=endday.isoformat())
+            stock = Stock()
+            stock.id = stockId
+            dates = result.index.tolist()
+            for day in dates:
+                stock.dates.append(day.date().isoformat())
+            stock.openPrices = result.open.values.tolist()
+            stock.closePrices = result.close.values.tolist()
+            stock.volume = result.volume.tolist()
+            stock.calc_v_ma5()
             stock.PChange()
             data.append(stock)
         except Exception, e:
@@ -232,11 +276,14 @@ def fetchToday(stocks):
                         i += 1
                     stock.v_ma5.append(total/(idx + 1))
                     
-def fetchData(dataPrefix):
+def fetchData(dataPrefix, startday, endday):
     path = "d:\\work\\doors\\project\\cd7\\stock"
     data = []
+    arg = []
     pool = ThreadPool(len(dataPrefix))
-    results = pool.map(fetchDataOneThread, dataPrefix)
+    partial_fetchDataOneThreadwithFQ = partial(fetchDataOneThreadwithFQ, startday=startday, endday=endday)
+    #results = pool.map(fetchDataOneThread, arg)
+    results = pool.map(partial_fetchDataOneThreadwithFQ, dataPrefix)
     pool.close()
     pool.join()
     for result in results:
@@ -467,9 +514,9 @@ def tree1filter(samples, conditionday):
     total = len(samples)
     prog = 0
     for idx, sample in enumerate(samples):
-        if((idx+1)*100/total == prog):
+        if((idx+1)*100/total > prog):
             print "filtering stock {0}%".format((idx+1)*100/total)
-            prog += 1
+            prog = (idx+1)*100/total
         try:
             todayindex = sample.indexof(conditionday)
             yesterdayindex = todayindex - 1
@@ -494,7 +541,7 @@ def tree1filter(samples, conditionday):
                 thisV_b = sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])
                 ifHengPan = sample.checkIfHengPan(conditionday)
 
-                score = tree1(sample, lastClose_bMd, lastOpen_bMd, lastClose_bUp, lastOpen_bUp, thisChange, thisOpen_bUp, thisClose_bUp, thisV_b, ifHengPan)
+                #score = tree1(sample, lastClose_bMd, lastOpen_bMd, lastClose_bUp, lastOpen_bUp, thisChange, thisOpen_bUp, thisClose_bUp, thisV_b, ifHengPan)
                 if(score > 3.0):
                     sample.score = score
                     result.append(sample)
@@ -568,7 +615,10 @@ def boolToInt(bool):
         return 0
     
 def floatFormat(num):
-    return float(int(num*1000))/1000
+    if(math.isnan(num)):
+        return 0.0
+    else:
+        return float(int(num*1000))/1000
 
 def writeToJsonFileForTraining(dataArray):
     file = open("stock.json", "w")
@@ -650,9 +700,9 @@ def writeToArffFile(dataArray):
     total = len(dataArray)
     prog = 0
     for idx, sample in enumerate(dataArray):
-        if((idx+1)*100/total == prog):
-            print "{0}\tOutput: {1}%\n".format(datetime.now().strftime("%d %b %Y %H:%M:%S"), prog)
-            prog +=1
+        if((idx+1)*100/total > prog):
+            print "{0}\tOutput: {1}%\n".format(datetime.now().strftime("%d %b %Y %H:%M:%S"), (idx+1)*100/total)
+            prog = (idx+1)*100/total
         for day in sample.dates:
             conditionday = datetime.strptime(day, '%Y-%m-%d').date()
             data = stockView().fromStock(sample, conditionday)
@@ -668,8 +718,10 @@ prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009
 #prefixes = ['60030']
 
 logging.basicConfig(filename= datetime.now().strftime("%Y_%m_%d_%H_%M_%S")+ '.log',level=logging.DEBUG)
-stocks = fetchData(prefixes)
-#writeToArffFile(stocks)
+today = date.today()
+startday = today - timedelta(days=365)
+stocks = fetchData(prefixes, startday, today)
+writeToArffFile(stocks)
 #printGoodStock(stocks, filterStock)
 #verify(stocks, filterStock, date.today(), 0.0)
 #printGoodStock(stocks, filterStock2)
@@ -679,6 +731,6 @@ stocks = fetchData(prefixes)
 #writeToJsonFileForTraining(stocks)
 #printGoodStock(stocks, wekafilter)
 #verify(stocks, wekafilter, date.today(), 0.0)
-printGoodStock(stocks, tree1filter)
-verify(stocks, tree1filter, date.today(), 0.0)
+#printGoodStock(stocks, tree1filter)
+#verify(stocks, tree1filter, date.today(), 0.0)
 logging.shutdown()
