@@ -9,7 +9,7 @@ import threading
 import Queue, math, random, warnings,logging
 from functools import partial
 from multiprocessing.dummy import Pool as ThreadPool
-#from tree import tree1
+from tree import tree1
 class Stock:
     def __init__(self):
         self.changePrices = []
@@ -188,8 +188,6 @@ class stockView:
     
 
 def fetchDataOneThread(prefix, startday, endday):
-    today = date.today()
-    startday = today - timedelta(days=120)
     data = []
     for index in range(pow(10,(6-len(prefix)))):
         suffix = str(index).zfill(6-len(prefix))
@@ -214,8 +212,6 @@ def fetchDataOneThread(prefix, startday, endday):
 
 #前复权
 def fetchDataOneThreadwithFQ(prefix, startday, endday):
-    today = date.today()
-    startday = today - timedelta(days=120)
     data = []
     for index in range(pow(10,(6-len(prefix)))):
         suffix = str(index).zfill(6-len(prefix))
@@ -541,7 +537,7 @@ def tree1filter(samples, conditionday):
                 thisV_b = sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])
                 ifHengPan = sample.checkIfHengPan(conditionday)
 
-                #score = tree1(sample, lastClose_bMd, lastOpen_bMd, lastClose_bUp, lastOpen_bUp, thisChange, thisOpen_bUp, thisClose_bUp, thisV_b, ifHengPan)
+                score = tree1(sample, lastClose_bMd, lastOpen_bMd, lastClose_bUp, lastOpen_bUp, thisChange, thisOpen_bUp, thisClose_bUp, thisV_b, ifHengPan)
                 if(score > 3.0):
                     sample.score = score
                     result.append(sample)
@@ -668,8 +664,8 @@ def writeToJsonFileForTraining(dataArray):
     file.write(jsonstr)
     file.close()
     
-def writeToArffFile(dataArray):
-    file = open("stock.arff", "w")
+def writeToArffFile(dataArray,filename):
+    file = open(filename, "w")
     jsonobj = {}
     
     lastClose_bMds = []
@@ -718,10 +714,16 @@ prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009
 #prefixes = ['60030']
 
 logging.basicConfig(filename= datetime.now().strftime("%Y_%m_%d_%H_%M_%S")+ '.log',level=logging.DEBUG)
+
 today = date.today()
-startday = today - timedelta(days=365)
+startday = today - timedelta(days=120)
 stocks = fetchData(prefixes, startday, today)
-writeToArffFile(stocks)
+#writeToArffFile(stocks,"stock_2015.arff")
+
+#startday = datetime.strptime("2007-01-01", '%Y-%m-%d').date()
+#endday = datetime.strptime("2007-12-31", '%Y-%m-%d').date()
+#stocks = fetchData(prefixes, startday, endday)
+#writeToArffFile(stocks,"stock_2007.arff")
 #printGoodStock(stocks, filterStock)
 #verify(stocks, filterStock, date.today(), 0.0)
 #printGoodStock(stocks, filterStock2)
@@ -731,6 +733,6 @@ writeToArffFile(stocks)
 #writeToJsonFileForTraining(stocks)
 #printGoodStock(stocks, wekafilter)
 #verify(stocks, wekafilter, date.today(), 0.0)
-#printGoodStock(stocks, tree1filter)
-#verify(stocks, tree1filter, date.today(), 0.0)
+printGoodStock(stocks, tree1filter)
+verify(stocks, tree1filter, date.today(), 0.0)
 logging.shutdown()
