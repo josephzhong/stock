@@ -1,141 +1,12 @@
 # -*- coding:utf-8 -*-  
-import tushare as ts
-from datetime import date, timedelta, datetime
-import numpy as np
-import json
 from os.path import exists, join
 from string import split
 import threading
 import Queue, math, random, warnings,logging
-from functools import partial
-from multiprocessing.dummy import Pool as ThreadPool
 from tree import tree1
-class Stock:
-    def __init__(self):
-        self.changePrices = []
-        self.dates = []
-        self.openPrices = []
-        self.closePrices = []
-        self.v_ma5 = []
-        self.volume = []
-        self.name = u""
-        self.score = 0.0
-    def dict2obj(self, dict):
-        #"""
-        #summary:
-        #将object转换成dict类型
-        memberlist = [m for m in dir(self)]
-        for m in memberlist:
-            if m[0] != "_" and not callable(getattr(self,m)):
-                setattr(self, m, dict[m])
-    def obj2dict(self):
-        #"""
-        #summary:
-        #将object转换成dict类型
-        memberlist = [m for m in dir(self)]
-        _dict = {}
-        for m in memberlist:
-            if m[0] != "_" and not callable(getattr(self,m)):
-                _dict[m] = getattr(self,m)
-        return _dict
-    def PChange(self):
-        for idx, closePrice in enumerate(self.closePrices):
-            if (idx < 1 or self.openPrices[idx]==0):
-                self.changePrices.append(0.0)
-            else:
-                self.changePrices.append((self.closePrices[idx] - self.openPrices[idx])/self.openPrices[idx])
-    def calc_v_ma5(self):
-        for idx, date in enumerate(self.dates):
-            vma5 = 0.0
-            if(idx >= 5 and len(self.volume[0:idx]) > 0):
-                vma5 = np.nanmean(self.volume[idx-5:idx])
-            else:
-                if(len(self.volume[0:idx]) == 0):
-                    vma5 = self.volume[0]
-                else:
-                    vma5 = np.nanmean(self.volume[0:idx])
-            if(math.isnan(vma5)):
-                vma5 = 0.0
-            self.v_ma5.append(vma5)
-    def indexof(self, day):
-        for idx, d in enumerate(self.dates):
-            if(d == day.isoformat()):
-                return idx
-        #today没有数据就往前推一天，最多往前推3天
-        yesterday = day + timedelta(days=-1)
-        for idx, d in enumerate(self.dates):
-            if(d == yesterday.isoformat()):
-                return idx
-        daybeforeyesterday = yesterday + timedelta(days=-1)
-        for idx, d in enumerate(self.dates):
-            if(d == daybeforeyesterday.isoformat()):
-                return idx
-        beforedaybeforeyesterday = daybeforeyesterday + timedelta(days=-1)
-        for idx, d in enumerate(self.dates):
-            if(d == beforedaybeforeyesterday.isoformat()):
-                return idx
-        return -1
-    def bollMd(self, day):
-        result = 0.0
-        indexend = self.indexof(day)
-        if(indexend > -1):
-            indexstart = indexend - 20
-            if (indexstart < 0):
-                indexstart = 0
-            if(len(self.closePrices[indexstart:indexend]) == 0):
-                result = self.closePrices[indexend]
-            else:
-                result = np.nanmean(self.closePrices[indexstart:indexend])
-            if(math.isnan(result)):
-                result = 0.0
-        return result
-    def bollUp(self, day):
-        result = 0.0
-        indexend = self.indexof(day)
-        if(indexend > -1):
-            indexstart = indexend - 20
-            if (indexstart < 0):
-                indexstart = 0
-            std = 0.0
-            if(len(self.closePrices[indexstart:indexend]) > 0):
-                std = np.std(self.closePrices[indexstart:indexend])
-            if(math.isnan(std)):
-                std = 0.0
-            result = self.bollMd(day) + 2*std
-        return result
-    def bollDn(self, day):
-        result = 0.0
-        indexend = self.indexof(day)
-        if(indexend > -1):
-            indexstart = indexend - 20
-            if (indexstart < 0):
-                indexstart = 0
-            std = 0.0
-            if(len(self.closePrices[indexstart:indexend]) > 0):
-                std = np.std(self.closePrices[indexstart:indexend])
-            if(math.isnan(std)):
-                std = 0.0
-            result = self.bollMd(day) - 2*std
-        return result
-    def v_b(self, v_5, v_today):
-        if (v_5 == 0.0):
-            return 0.0
-        else:
-            return v_today/v_5
-    def checkIfHengPan(self, currentday):
-        period = 20
-        uplimit = 0.3
-        downlimit = -0.3
-        idxend = self.indexof(currentday)
-        idxstart = idxend - period
-        if(idxend > -1 and idxstart > -1):
-            for idxday in range(idxstart, idxend):
-                delta = (self.closePrices[idxday] - self.openPrices[idxstart])/self.openPrices[idxstart]
-                if ( delta > uplimit or delta < downlimit):
-                    return False
-            return True
-        return False
-    
+from stockclass import Stock
+from data import *
+
 class stockView:
     def __init__(self):
         self.lastClose_bMd = 0.0
@@ -187,105 +58,6 @@ class stockView:
             return None
     
 
-def fetchDataOneThread(prefix, startday, endday):
-    data = []
-    for index in range(pow(10,(6-len(prefix)))):
-        suffix = str(index).zfill(6-len(prefix))
-        stockId = prefix + suffix
-        try:    
-            result = ts.get_hist_data(stockId, start=startday.isoformat(),end=endday.isoformat())
-            stock = Stock()
-            stock.id = stockId
-            stock.dates = result.index.tolist()
-            stock.openPrices = result.open.values.tolist()
-            stock.closePrices = result.close.values.tolist()
-            stock.v_ma5 = result.v_ma5.values.tolist()
-            stock.volume = result.volume.tolist()
-            stock.PChange()
-            data.append(stock)
-        except Exception, e:
-            print e
-            if(str(e).find("list index out of range") > -1):
-                logging.warning(str(e))
-            print stockId + " is not a valid stock.\n"
-    return data
-
-#前复权
-def fetchDataOneThreadwithFQ(prefix, startday, endday):
-    data = []
-    for index in range(pow(10,(6-len(prefix)))):
-        suffix = str(index).zfill(6-len(prefix))
-        stockId = prefix + suffix
-        try:    
-            result = ts.get_h_data(stockId, start=startday.isoformat(),end=endday.isoformat())
-            stock = Stock()
-            stock.id = stockId
-            dates = result.index.tolist()
-            for day in dates:
-                stock.dates.append(day.date().isoformat())
-            stock.openPrices = result.open.values.tolist()
-            stock.closePrices = result.close.values.tolist()
-            stock.volume = result.volume.tolist()
-            stock.calc_v_ma5()
-            stock.PChange()
-            data.append(stock)
-        except Exception, e:
-            print e
-            if(str(e).find("list index out of range") > -1):
-                logging.warning(str(e))
-            print stockId + " is not a valid stock.\n"
-    return data
-
-def fetchToday(stocks):
-    today = date.today()
-    stocksnow = ts.get_today_all()
-    codes = stocksnow.code.tolist()
-    for stock in stocks:
-        stockidx = -1
-        for codeidx, code in enumerate(codes):
-            if(stock.id == code):
-                stockidx = codeidx
-                break
-        if(stockidx > -1):
-            stock.name = stocksnow.name.tolist()[stockidx]
-            if(len(stock.dates) - 1 < 0):
-                continue
-            if(today.isoformat() != stock.dates[len(stock.dates) - 1]):
-                if(len(stock.closePrices) - 1 < 0):
-                    continue
-                stock.dates.append(today)
-                stock.openPrices.append(stocksnow.open.tolist()[stockidx])
-                stock.closePrices.append(stocksnow.trade.tolist()[stockidx])
-                if(stocksnow.open.tolist()[stockidx] == 0.0):
-                    stock.changePrices.append(0.0)
-                else:
-                    stock.changePrices.append((stocksnow.trade.tolist()[stockidx] - stocksnow.open.tolist()[stockidx])/stocksnow.open.tolist()[stockidx])
-                stock.volume.append(stocksnow.volume.tolist()[stockidx])
-                idx = stock.indexof(today)
-                if(idx >= 4):
-                    stock.v_ma5.append((stock.volume[idx] + stock.volume[idx - 1] + stock.volume[idx - 2] + stock.volume[idx - 3] + stock.volume[idx - 4])/5)
-                else:
-                    total = 0
-                    i = 0
-                    while(i<=idx):
-                        total += stock.volume[idx - i]
-                        i += 1
-                    stock.v_ma5.append(total/(idx + 1))
-                    
-def fetchData(dataPrefix, startday, endday):
-    path = "d:\\work\\doors\\project\\cd7\\stock"
-    data = []
-    arg = []
-    pool = ThreadPool(len(dataPrefix))
-    partial_fetchDataOneThreadwithFQ = partial(fetchDataOneThreadwithFQ, startday=startday, endday=endday)
-    #results = pool.map(fetchDataOneThread, arg)
-    results = pool.map(partial_fetchDataOneThreadwithFQ, dataPrefix)
-    pool.close()
-    pool.join()
-    for result in results:
-        data.extend(result)
-    #fetchToday(data)
-    return data
 #base on human experience
 def filterStock(samples, conditionday):
     result = []
@@ -538,7 +310,7 @@ def tree1filter(samples, conditionday):
                 ifHengPan = sample.checkIfHengPan(conditionday)
 
                 score = tree1(sample, lastClose_bMd, lastOpen_bMd, lastClose_bUp, lastOpen_bUp, thisChange, thisOpen_bUp, thisClose_bUp, thisV_b, ifHengPan)
-                if(score > 3.0):
+                if(score > 0.0):
                     sample.score = score
                     result.append(sample)
         except Exception, e:
