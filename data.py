@@ -5,7 +5,7 @@ from datetime import date, timedelta, datetime
 from functools import partial
 from multiprocessing.dummy import Pool as ThreadPool
 import tushare as ts
-import json
+import json, logging
 from pandas import Series
 def fetchDataOneThread(prefix, startday, endday):
     data = []
@@ -111,6 +111,7 @@ def storeData(prefix, startday, endday):
     client =MongoClient('mongodb://localhost:27017/')
     database = client["stock"]
     newlastday = None
+    newbeginday = None
     for index in range(pow(10,(6-len(prefix)))):
         suffix = str(index).zfill(6-len(prefix))
         stockId = prefix + suffix
@@ -126,8 +127,10 @@ def storeData(prefix, startday, endday):
             if(tick == None):
                 ticks.insert(json.loads(results.to_json(orient='records')))
             dates = results.index.tolist()
-            if(newlastday == None or newlastday < dates[0]):
+            if(newlastday == None or newlastday < dates[0].date()):
                 newlastday = dates[0].date()
+            if(newbeginday == None or newbeginday < dates[len(dates) - 1].date()):
+                newbeginday = dates[len(dates) - 1].date()
         except Exception, e:
             print e
             if(str(e).find("list index out of range") > -1):
@@ -137,42 +140,35 @@ def storeData(prefix, startday, endday):
     profile = profilecollections.find_one()
     if(newlastday != None):
         if(profile != None):
-            profilecollections.update_one({'_id': profile['_id']}, {'lastupdateday': newlastday.isoformat()})
+            profilecollections.update_one({'_id': profile['_id']}, {'$set': {'lastupdateday': newlastday.isoformat()}})
         else:
             profilecollections.insert_one({'lastupdateday': newlastday.isoformat()})
-    client.close()
-    
-def fetchData_mongo(dataPrefix, startday, endday):
-    pool = ThreadPool(len(dataPrefix))
-    client =MongoClient('mongodb://localhost:27017/')
-    db = client["stock"]
-    profilecollections = db.profile
-    if(profilecollections == None):
-        db.create_collection("profile")
-        profilecollections = db.profile
     profile = profilecollections.find_one()
-    fetch_starday = startday
-    if(profile != None):
-        lastday = datetime.strptime(profile['lastupdateday'], '%Y-%m-%d').date()
-        if(fetch_starday <= lastday):
-            fetch_starday = lastday + timedelta(days=1)
-    if(fetch_starday <= endday):
-        partial_storeData = partial(storeData, startday=fetch_starday, endday=endday)
-        pool.map(partial_storeData, dataPrefix)
-        pool.close()
-        pool.join()
+    if(newbeginday != None):
+        if(profile != None):
+            profilecollections.update_one({'_id': profile['_id']}, {'$set': {'beginupdateday': newbeginday.isoformat()}})
+        else:
+            profilecollections.insert_one({'beginupdateday': newbeginday.isoformat()})
+    client.close()
+
+def getDataFromMongoOnethread(prefix, startday, endday):
     data = []
-    for prefix in dataPrefix:
-        for index in range(pow(10,(6-len(prefix)))):
-            suffix = str(index).zfill(6-len(prefix))
-            stockId = prefix + suffix
-            try:    
-                ticks = db.ticks
-                if(ticks != None):
-                    results = ticks.find({"stockId": stockId, "date":{'$gte': startday.isoformat(),'$lte': endday.isoformat()}})
+    client =MongoClient('mongodb://localhost:27017/')
+    database = client["stock"]
+    try:    
+        ticks = database.ticks
+        if(ticks != None):
+            prefixstart = int(prefix)*pow(10,(6-len(prefix)))
+            prefixend = prefixstart + pow(10,(6-len(prefix))) - 1
+            resultgroups = ticks.group(["stockId"], {"stockId":{'$gte': str(prefixstart).zfill(6),'$lte': str(prefixend).zfill(6) }, "date":{'$gte': startday.isoformat(),'$lte': endday.isoformat()}},
+                                       {'list': []}, # initial
+                        'function(obj, prev) {prev.list.push(obj)}') # reducer)
+            for resultlists in resultgroups:
+                if(len(resultlists) > 0):
+                    results = resultlists['list']
                     stock = Stock()
+                    stock.id = results[0]["stockId"]
                     for result in results:
-                        stock.id = stockId
                         stock.dates.append(result['date'])
                         stock.openPrices.append(result['open'])
                         stock.closePrices.append(result['close'])
@@ -180,17 +176,56 @@ def fetchData_mongo(dataPrefix, startday, endday):
                     stock.calc_v_ma5()
                     stock.PChange()
                     data.append(stock)
-            except Exception, e:
-                print e
-                if(str(e).find("list index out of range") > -1):
-                    logging.warning(str(e))
-                print stockId + " is not a valid stock.\n"
-    #fetchToday(data)
+    except Exception, e:
+        print e
+        logging.warning(str(e))
     client.close()
     return data
+
+def fetchData_mongo(dataPrefix, startday, endday):
+    
+    client =MongoClient('mongodb://localhost:27017/')
+    db = client["stock"]
+    profilecollections = db.profile
+    if(profilecollections == None):
+        db.create_collection("profile")
+        profilecollections = db.profile
+    profile = profilecollections.find_one()
+    client.close()
+    fetch_endday = endday
+    fetch_starday = startday
+    if(profile != None):
+        beginday = datetime.strptime(profile['beginupdateday'], '%Y-%m-%d').date()
+        lastday = datetime.strptime(profile['lastupdateday'], '%Y-%m-%d').date()
+        #if(fetch_endday >= beginday):
+        #    fetch_endday = beginday - timedelta(days=1)
+        if(fetch_starday <= lastday):
+            fetch_starday = lastday + timedelta(days=1)
+    if(fetch_starday <= fetch_endday):
+        partial_storeData = partial(storeData, startday=fetch_starday, endday=fetch_endday)
+        pool = ThreadPool(len(dataPrefix))
+        pool.map(partial_storeData, dataPrefix)
+        pool.close()
+        pool.join()
+        
+    
+    data = []
+    pool = ThreadPool(len(dataPrefix))
+    partial_getDataFromMongoOnethread = partial(getDataFromMongoOnethread, startday=startday, endday=endday)
+    results = pool.map(partial_getDataFromMongoOnethread, dataPrefix)
+    pool.close()
+    pool.join()
+    for result in results:
+        data.extend(result)
+    
+    #fetchToday(data)
+
+    return data
+'''
 prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009', '6010', '6011', '6012', '6013', '6014', '6015', '6016', '6017',  '6018', '6019', '6030', '6031', '6032', '6033', '6034', '6035', '6036', '6037', '6038', '6039', '0020','0021','0022','0023','0024','0025','0026','0027','0028','0029']
 #prefixes = ['60030']
 
-today = date.today()
-startday = today - timedelta(days=365)
-stocks = fetchData_mongo(prefixes, startday, today - timedelta(days=1))
+startday = datetime.strptime("2010-01-01", '%Y-%m-%d').date()
+endday = datetime.strptime("2014-05-28", '%Y-%m-%d').date()
+stocks = fetchData_mongo(prefixes, startday, endday)
+'''

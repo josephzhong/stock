@@ -3,7 +3,8 @@ from os.path import exists, join
 from string import split
 import threading
 import Queue, math, random, warnings,logging
-from tree import tree1
+#from tree import tree1
+from tree2007 import tree2007
 from stockclass import Stock
 from data import *
 
@@ -309,7 +310,8 @@ def tree1filter(samples, conditionday):
                 thisV_b = sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])
                 ifHengPan = sample.checkIfHengPan(conditionday)
 
-                score = tree1(sample, lastClose_bMd, lastOpen_bMd, lastClose_bUp, lastOpen_bUp, thisChange, thisOpen_bUp, thisClose_bUp, thisV_b, ifHengPan)
+                #score = tree1(sample, lastClose_bMd, lastOpen_bMd, lastClose_bUp, lastOpen_bUp, thisChange, thisOpen_bUp, thisClose_bUp, thisV_b, ifHengPan)
+                score = tree2007(sample, lastClose_bMd, lastOpen_bMd, lastClose_bUp, lastOpen_bUp, thisChange, thisOpen_bUp, thisClose_bUp, thisV_b, ifHengPan)
                 if(score > 0.0):
                     sample.score = score
                     result.append(sample)
@@ -487,10 +489,10 @@ prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009
 
 logging.basicConfig(filename= datetime.now().strftime("%Y_%m_%d_%H_%M_%S")+ '.log',level=logging.DEBUG)
 
-today = date.today()
-startday = today - timedelta(days=120)
-stocks = fetchData(prefixes, startday, today)
-#writeToArffFile(stocks,"stock_2015.arff")
+startday = datetime.strptime("2007-01-01", '%Y-%m-%d').date()
+endday = datetime.strptime("2007-12-31", '%Y-%m-%d').date()
+stocks = fetchData_mongo(prefixes, startday, endday)
+#writeToArffFile(stocks,"stock_2007.arff")
 
 #startday = datetime.strptime("2007-01-01", '%Y-%m-%d').date()
 #endday = datetime.strptime("2007-12-31", '%Y-%m-%d').date()
@@ -505,6 +507,8 @@ stocks = fetchData(prefixes, startday, today)
 #writeToJsonFileForTraining(stocks)
 #printGoodStock(stocks, wekafilter)
 #verify(stocks, wekafilter, date.today(), 0.0)
+#printGoodStock(stocks, tree1filter)
+#verify(stocks, tree1filter, date.today(), 0.0)
 printGoodStock(stocks, tree1filter)
 verify(stocks, tree1filter, date.today(), 0.0)
 logging.shutdown()
