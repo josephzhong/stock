@@ -123,9 +123,9 @@ def storeData(prefix, startday, endday):
             if(ticks == None):
                 database.create_collection("ticks")
                 ticks = database.ticks
-            tick = ticks.find_one({"stockId": stockId, "date":{'$gte': startday.isoformat(),'$lte': endday.isoformat()}})
-            if(tick == None):
-                ticks.insert(json.loads(results.to_json(orient='records')))
+            #tick = ticks.find_one({"stockId": stockId, "date":{'$gte': startday.isoformat(),'$lte': endday.isoformat()}})
+            #if(tick == None):
+            ticks.insert(json.loads(results.to_json(orient='records')))
             dates = results.index.tolist()
             if(newlastday == None or newlastday < dates[0].date()):
                 newlastday = dates[0].date()
@@ -161,11 +161,11 @@ def getDataFromMongoOnethread(prefix, startday, endday):
             prefixstart = int(prefix)*pow(10,(6-len(prefix)))
             prefixend = prefixstart + pow(10,(6-len(prefix))) - 1
             resultgroups = ticks.group(["stockId"], {"stockId":{'$gte': str(prefixstart).zfill(6),'$lte': str(prefixend).zfill(6) }, "date":{'$gte': startday.isoformat(),'$lte': endday.isoformat()}},
-                                       {'list': []}, # initial
-                        'function(obj, prev) {prev.list.push(obj)}') # reducer)
+                                       {'list': []},'function(obj, prev) {prev.list.push(obj)}') # reducer)
             for resultlists in resultgroups:
                 if(len(resultlists) > 0):
                     results = resultlists['list']
+                    results.sort(key=lambda x:x['date'])
                     stock = Stock()
                     stock.id = results[0]["stockId"]
                     for result in results:
