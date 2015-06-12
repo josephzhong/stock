@@ -23,11 +23,11 @@ def fetchDataOneThread(prefix, startday, endday):
             stock.volume = result.volume.tolist()
             stock.PChange()
             data.append(stock)
-        except Exception, e:
-            print e
+        except Exception as e:
+            print (e)
             if(str(e).find("list index out of range") > -1):
                 logging.warning(str(e))
-            print stockId + " is not a valid stock.\n"
+            print (stockId + " is not a valid stock.\n")
     return data
 
 #ǰ��Ȩ
@@ -49,11 +49,11 @@ def fetchDataOneThreadwithFQ(prefix, startday, endday):
             stock.calc_v_ma5()
             stock.PChange()
             data.append(stock)
-        except Exception, e:
-            print e
+        except Exception as e:
+            print (e)
             if(str(e).find("list index out of range") > -1):
                 logging.warning(str(e))
-            print stockId + " is not a valid stock.\n"
+            print (stockId + " is not a valid stock.\n")
     return data
 
 def fetchToday(stocks):
@@ -131,11 +131,11 @@ def storeData(prefix, startday, endday):
                 newlastday = dates[0].date()
             if(newbeginday == None or newbeginday < dates[len(dates) - 1].date()):
                 newbeginday = dates[len(dates) - 1].date()
-        except Exception, e:
-            print e
+        except Exception as e:
+            print (e)
             if(str(e).find("list index out of range") > -1):
                 logging.warning(str(e))
-            print stockId + " is not a valid stock.\n"
+            print (stockId + " is not a valid stock.\n")
     profilecollections = database.profile
     profile = profilecollections.find_one()
     if(newlastday != None):
@@ -170,14 +170,14 @@ def getDataFromMongoOnethread(prefix, startday, endday):
                     stock.id = results[0]["stockId"]
                     for result in results:
                         stock.dates.append(result['date'])
-                        stock.openPrices.append(result['open'])
-                        stock.closePrices.append(result['close'])
+                        stock.openPrices.append(float(result['open']))
+                        stock.closePrices.append(float(result['close']))
                         stock.volume.append(result['volume'])
                     stock.calc_v_ma5()
                     stock.PChange()
                     data.append(stock)
-    except Exception, e:
-        print e
+    except Exception as e:
+        print (e)
         logging.warning(str(e))
     client.close()
     return data
