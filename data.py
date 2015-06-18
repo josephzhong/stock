@@ -106,9 +106,8 @@ def fetchData(dataPrefix, startday, endday):
     #fetchToday(data)
     return data
 
-def storeData(prefix, startday, endday):
+def storeData(prefix, startday, endday, client):
     data = []
-    client =MongoClient('mongodb://localhost:27017/')
     database = client["stock"]
     newlastday = None
     newbeginday = None
@@ -149,11 +148,9 @@ def storeData(prefix, startday, endday):
             profilecollections.update_one({'_id': profile['_id']}, {'$set': {'beginupdateday': newbeginday.isoformat()}})
         else:
             profilecollections.insert_one({'beginupdateday': newbeginday.isoformat()})
-    client.close()
 
-def getDataFromMongoOnethread(prefix, startday, endday):
+def getDataFromMongoOnethread(prefix, startday, endday, client):
     data = []
-    client =MongoClient('mongodb://localhost:27017/')
     database = client["stock"]
     try:    
         ticks = database.ticks
@@ -179,19 +176,17 @@ def getDataFromMongoOnethread(prefix, startday, endday):
     except Exception as e:
         print (e)
         logging.warning(str(e))
-    client.close()
     return data
 
 def fetchData_mongo(dataPrefix, startday, endday):
     
-    client =MongoClient('mongodb://localhost:27017/')
+    client =MongoClient(host='localhost', port=27017, maxPoolSize=None)
     db = client["stock"]
     profilecollections = db.profile
     if(profilecollections == None):
         db.create_collection("profile")
         profilecollections = db.profile
     profile = profilecollections.find_one()
-    client.close()
     fetch_endday = endday
     fetch_starday = startday
     if(profile != None):
@@ -202,7 +197,7 @@ def fetchData_mongo(dataPrefix, startday, endday):
         if(fetch_starday <= lastday):
             fetch_starday = lastday + timedelta(days=1)
     if(fetch_starday <= fetch_endday):
-        partial_storeData = partial(storeData, startday=fetch_starday, endday=fetch_endday)
+        partial_storeData = partial(storeData, startday=fetch_starday, endday=fetch_endday, client = client)
         pool = ThreadPool(len(dataPrefix))
         pool.map(partial_storeData, dataPrefix)
         pool.close()
@@ -211,7 +206,7 @@ def fetchData_mongo(dataPrefix, startday, endday):
     
     data = []
     pool = ThreadPool(len(dataPrefix))
-    partial_getDataFromMongoOnethread = partial(getDataFromMongoOnethread, startday=startday, endday=endday)
+    partial_getDataFromMongoOnethread = partial(getDataFromMongoOnethread, startday=startday, endday=endday, client = client)
     results = pool.map(partial_getDataFromMongoOnethread, dataPrefix)
     pool.close()
     pool.join()
@@ -219,7 +214,7 @@ def fetchData_mongo(dataPrefix, startday, endday):
         data.extend(result)
     
     #fetchToday(data)
-
+    client.close()
     return data
 '''
 prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009', '6010', '6011', '6012', '6013', '6014', '6015', '6016', '6017',  '6018', '6019', '6030', '6031', '6032', '6033', '6034', '6035', '6036', '6037', '6038', '6039', '0020','0021','0022','0023','0024','0025','0026','0027','0028','0029']

@@ -1,9 +1,9 @@
 # -*- coding:utf-8 -*-  
 from os.path import exists, join
 import threading
-import math, random, warnings,logging
+import math, random, warnings,logging, sys
 #from tree import tree1
-from tree2007 import tree2007
+#from tree2007 import tree1filter
 from stockclass import Stock
 from data import *
 
@@ -276,49 +276,6 @@ def wekafilter(samples, conditionday):
                 logging.warning("filterStock3 function: "  + str(e))
     return result
 
-#first filter using machine learning
-def tree1filter(samples, conditionday):
-    result = []
-    total = len(samples)
-    prog = 0
-    for idx, sample in enumerate(samples):
-        if((idx+1)*100/total > prog):
-            print ("filtering stock {0}%".format(int((idx+1)*100/total)))
-            prog = (idx+1)*100/total
-        try:
-            todayindex = sample.indexof(conditionday)
-            yesterdayindex = todayindex - 1
-            if(yesterdayindex > -1 and yesterdayindex > 20 and todayindex > 20 and todayindex < len(sample.dates)):
-                bMd = sample.bollMd(conditionday)
-                bUp = sample.bollUp(conditionday)
-                lastClose = sample.closePrices[yesterdayindex]
-                lastOpen = sample.openPrices[yesterdayindex]
-                thisChange = sample.changePrices[todayindex]
-                thisOpen = sample.openPrices[todayindex]
-                thisClose = sample.closePrices[todayindex]
-                thisV_b = sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])
-                if(bMd == 0.0 or bUp == 0.0):
-                    continue
-                lastClose_bMd = (lastClose-bMd)/bMd
-                lastOpen_bMd = (lastOpen-bMd)/bMd
-                lastClose_bUp = (lastClose-bUp)/bUp
-                lastOpen_bUp = (lastOpen-bUp)/bUp
-                thisChange = sample.changePrices[todayindex]
-                thisOpen_bUp = (thisOpen-bUp)/bUp
-                thisClose_bUp = (thisClose-bUp)/bUp
-                thisV_b = sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])
-                ifHengPan = sample.checkIfHengPan(conditionday)
-
-                #score = tree1(sample, lastClose_bMd, lastOpen_bMd, lastClose_bUp, lastOpen_bUp, thisChange, thisOpen_bUp, thisClose_bUp, thisV_b, ifHengPan)
-                score = tree2007(sample, lastClose_bMd, lastOpen_bMd, lastClose_bUp, lastOpen_bUp, thisChange, thisOpen_bUp, thisClose_bUp, thisV_b, ifHengPan)
-                if(score > 0.0):
-                    sample.score = score
-                    result.append(sample)
-        except Exception as e:
-                logging.warning("tree1filter function: "  + str(e))
-    return result
-
-
 def checkTPFP(positives, conditionday, thres):
     tpositives = 0
     for positive in positives:
@@ -355,9 +312,9 @@ def averageTPFP(targets, filter, conditionday, thres):
         return [0.0, 0.0]
     return [sum[0]/verifytimes, sum[1]/verifytimes]
 
-def printGoodStock(stocks, filter):
+def printGoodStock(stocks, filter, day):
     goodstocks = []
-    today = date.today()
+    today = day
     goodstocks = filter(stocks, today)
     logging.info(filter.__name__ + " Good stocks: ")
     if (len(goodstocks) == 0):
@@ -469,8 +426,8 @@ def writeToArffFile(dataArray,filename):
     total = len(dataArray)
     prog = 0
     for idx, sample in enumerate(dataArray):
-        if((idx+1)*100/total > prog):
-            print ("{0}\tOutput: {1}%\n".format(datetime.now().strftime("%d %b %Y %H:%M:%S"), (idx+1)*100/total))
+        if(int((idx+1)*100/total) > prog):
+            print ("{0}\tOutput: {1}%\n".format(datetime.now().strftime("%d %b %Y %H:%M:%S"), int((idx+1)*100/total)))
             prog = (idx+1)*100/total
         for day in sample.dates:
             conditionday = datetime.strptime(day, '%Y-%m-%d').date()
@@ -483,15 +440,31 @@ def writeToArffFile(dataArray,filename):
                 file.write("{{0 {0[0]}, 1 {0[1]}, 2 {0[2]}, 3 {0[3]}, 4 {0[4]}, 5 {0[5]}, 6 {0[6]}, 7 {0[7]}, 8 {0[8]}, 9 {1}}}\n".format(attrvalues, data.result))
     file.close()
 
+def subprocessfunc(data, day):
+    #from tree2007 import tree1filter
+    from tree7y600pre import tree7y600prefilter
+    printGoodStock(data, tree7y600prefilter, day)
+    verify(data, tree7y600prefilter, day, 0.0)
+prefixes = []
 #prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009', '6010', '6011', '6012', '6013', '6014', '6015', '6016', '6017',  '6018', '6019', '6030', '6031', '6032', '6033', '6034', '6035', '6036', '6037', '6038', '6039', '0020','0021','0022','0023','0024','0025','0026','0027','0028','0029']
-prefixes = ['60030']
+#prefixes = ['60030']
+#prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009', '6010', '6011', '6012', '6013', '6014', '6015', '6016', '6017',  '6018', '6019', '6030', '6031', '6032', '6033', '6034', '6035', '6036', '6037', '6038', '6039']
+prefs = ['600','601', '603', '002']
+for pref in prefs:
+    for i in range(10):
+        prefixes.append(pref + str(i).zfill(1))
 
 logging.basicConfig(filename= datetime.now().strftime("%Y_%m_%d_%H_%M_%S")+ '.log',level=logging.DEBUG)
 
-startday = datetime.strptime("2015-02-02", '%Y-%m-%d').date()
-endday = datetime.strptime("2015-06-11", '%Y-%m-%d').date()
+
+#if(sys.getrecursionlimit() < 4000):
+#    sys.setrecursionlimit(4000)
+#logging.info("Current stack limit: {0}".format(sys.getrecursionlimit()))
+
+startday = datetime.strptime("2015-03-18", '%Y-%m-%d').date()
+endday = datetime.strptime("2015-06-18", '%Y-%m-%d').date()
 stocks = fetchData_mongo(prefixes, startday, endday)
-#writeToArffFile(stocks,"stock_2007.arff")
+#writeToArffFile(stocks,"stock_7year.arff")
 
 #startday = datetime.strptime("2007-01-01", '%Y-%m-%d').date()
 #endday = datetime.strptime("2007-12-31", '%Y-%m-%d').date()
@@ -508,7 +481,14 @@ stocks = fetchData_mongo(prefixes, startday, endday)
 #verify(stocks, wekafilter, date.today(), 0.0)
 #printGoodStock(stocks, tree1filter)
 #verify(stocks, tree1filter, date.today(), 0.0)
-printGoodStock(stocks, tree1filter)
-verify(stocks, tree1filter, date.today(), 0.0)
+
+threading.stack_size(1310720000)
+subthread = threading.Thread(target=subprocessfunc, args=(stocks, endday))
+logging.info("subthread started.")
+subthread.start()
+subthread.join()
+
+#printGoodStock(stocks, tree1filter)
+#verify(stocks, tree1filter, date.today(), 0.0)
 logging.shutdown()
 print ("Script ends.")

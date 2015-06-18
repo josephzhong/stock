@@ -2,7 +2,7 @@
 from os.path import exists, join
 from string import split
 import threading
-import Queue, math, random, warnings,logging
+import Queue, math, random, warnings,logging, sys
 from tree import tree1
 #from tree2007 import tree2007
 from stockclass import Stock
@@ -310,8 +310,8 @@ def tree1filter(samples, conditionday):
                 thisV_b = sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])
                 ifHengPan = sample.checkIfHengPan(conditionday)
 
-                score = tree1(sample, lastClose_bMd, lastOpen_bMd, lastClose_bUp, lastOpen_bUp, thisChange, thisOpen_bUp, thisClose_bUp, thisV_b, ifHengPan)
-                #score = tree2007(sample, lastClose_bMd, lastOpen_bMd, lastClose_bUp, lastOpen_bUp, thisChange, thisOpen_bUp, thisClose_bUp, thisV_b, ifHengPan)
+                #score = tree1(sample, lastClose_bMd, lastOpen_bMd, lastClose_bUp, lastOpen_bUp, thisChange, thisOpen_bUp, thisClose_bUp, thisV_b, ifHengPan)
+                score = tree2007(sample, lastClose_bMd, lastOpen_bMd, lastClose_bUp, lastOpen_bUp, thisChange, thisOpen_bUp, thisClose_bUp, thisV_b, ifHengPan)
                 if(score > 0.0):
                     sample.score = score
                     result.append(sample)
@@ -484,10 +484,13 @@ def writeToArffFile(dataArray,filename):
                 file.write("{{0 {0[0]}, 1 {0[1]}, 2 {0[2]}, 3 {0[3]}, 4 {0[4]}, 5 {0[5]}, 6 {0[6]}, 7 {0[7]}, 8 {0[8]}, 9 {1}}}\n".format(attrvalues, data.result))
     file.close()
 
-prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009', '6010', '6011', '6012', '6013', '6014', '6015', '6016', '6017',  '6018', '6019', '6030', '6031', '6032', '6033', '6034', '6035', '6036', '6037', '6038', '6039', '0020','0021','0022','0023','0024','0025','0026','0027','0028','0029']
-#prefixes = ['60030']
-
+#prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009', '6010', '6011', '6012', '6013', '6014', '6015', '6016', '6017',  '6018', '6019', '6030', '6031', '6032', '6033', '6034', '6035', '6036', '6037', '6038', '6039', '0020','0021','0022','0023','0024','0025','0026','0027','0028','0029']
+prefixes = ['60030']
 logging.basicConfig(filename= datetime.now().strftime("%Y_%m_%d_%H_%M_%S")+ '.log',level=logging.DEBUG)
+
+if(sys.getrecursionlimit() < 4000):
+    sys.setrecursionlimit(4000)
+logging.info("Current stack limit: {0}".format(sys.getrecursionlimit()))
 
 startday = datetime.strptime("2015-02-02", '%Y-%m-%d').date()
 endday = datetime.strptime("2015-06-02", '%Y-%m-%d').date()
