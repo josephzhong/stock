@@ -6,6 +6,7 @@ import math, random, warnings,logging, sys
 #from tree2007 import tree1filter
 from stockclass import Stock
 from data import *
+from _datetime import timedelta
 
 class stockView:
     def __init__(self):
@@ -278,17 +279,29 @@ def wekafilter(samples, conditionday):
 
 def checkTPFP(positives, conditionday, thres):
     tpositives = 0
+    averGrowth = 0.0
     for positive in positives:
         index = positive.indexof(conditionday)
+        if(index < 0):
+            continue
         if(index + 1 >= len(positive.changePrices)):
             continue
+        averGrowth += positive.changePrices[index + 1]
         if(index > -1 and positive.changePrices[index + 1] >= thres):
             tpositives += 1
     if (len(positives)==0):
-        return [0.0, 0.0]
+        return [0.0, 0.0, 0.0]
     else:
-        return [float(tpositives)/len(positives), float(len(positives)-tpositives)/len(positives)]
+        return [float(tpositives)/len(positives), float(len(positives)-tpositives)/len(positives), averGrowth/len(positives)]
     
+def getnextworkingday(d):
+    newday = d + timedelta(days=1)
+    if(newday.weekday() > 4):
+        newday = newday + timedelta(days=1)
+    if(newday.weekday() > 4):
+        newday = newday + timedelta(days=1)
+    return newday
+
 def averageTPFP(targets, filter, conditionday, thres):
     verifydays = []
     deltadays = []
@@ -298,19 +311,20 @@ def averageTPFP(targets, filter, conditionday, thres):
             deltadays.append(deltaday)
     for deltaday in deltadays:
         verifydays.append(conditionday - timedelta(days=deltaday))
-    sum = [0.0, 0.0]
+    sum = [0.0, 0.0, 0.0]
     verifytimes = 0
     for day in verifydays:
         filteredstocks = filter(targets, day)
         tpfp = checkTPFP(filteredstocks, day, thres)
-        logging.info("{0} TP/FP: {1[0]:.2%}/{1[1]:.2%}".format(day.isoformat(), tpfp))
+        logging.info("{0} TP/FP: {1[0]:.2%}/{1[1]:.2%} Average Growth: {1[2]:.3%}".format(getnextworkingday(day).isoformat(), tpfp))
         sum[0] += tpfp[0]
         sum[1] += tpfp[1]
+        sum[2] += tpfp[2]
         if(tpfp[0] != 0.0 or tpfp[1] != 0.0):
             verifytimes += 1
     if(verifytimes == 0):
         return [0.0, 0.0]
-    return [sum[0]/verifytimes, sum[1]/verifytimes]
+    return [sum[0]/verifytimes, sum[1]/verifytimes, sum[2]/verifytimes]
 
 def printGoodStock(stocks, filter, day):
     goodstocks = []
@@ -332,7 +346,7 @@ def printGoodStock(stocks, filter, day):
 
 def verify(data, func, verifyday, thres):
     verify = averageTPFP(data, func, verifyday, thres)
-    logging.info(func.__name__ + " Average TP/FP: {0[0]:.2%} / {0[1]:.2%}".format(verify))
+    logging.info(func.__name__ + " Average TP/FP: {0[0]:.2%} / {0[1]:.2%} Average Growth: {0[2]:.3%}".format(verify))
 
 def boolToInt(bool):
     if(bool):
@@ -449,7 +463,8 @@ prefixes = []
 #prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009', '6010', '6011', '6012', '6013', '6014', '6015', '6016', '6017',  '6018', '6019', '6030', '6031', '6032', '6033', '6034', '6035', '6036', '6037', '6038', '6039', '0020','0021','0022','0023','0024','0025','0026','0027','0028','0029']
 #prefixes = ['60030']
 #prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009', '6010', '6011', '6012', '6013', '6014', '6015', '6016', '6017',  '6018', '6019', '6030', '6031', '6032', '6033', '6034', '6035', '6036', '6037', '6038', '6039']
-prefs = ['600','601', '603', '002']
+
+prefs = ['600','601', '603']
 for pref in prefs:
     for i in range(10):
         prefixes.append(pref + str(i).zfill(1))
@@ -482,7 +497,7 @@ stocks = fetchData_mongo(prefixes, startday, endday)
 #printGoodStock(stocks, tree1filter)
 #verify(stocks, tree1filter, date.today(), 0.0)
 
-threading.stack_size(1310720000)
+threading.stack_size(231072000)
 subthread = threading.Thread(target=subprocessfunc, args=(stocks, endday))
 logging.info("subthread started.")
 subthread.start()
