@@ -459,10 +459,19 @@ def subprocessfunc(data, day):
     from tree7y600pre import tree7y600prefilter
     printGoodStock(data, tree7y600prefilter, day)
     verify(data, tree7y600prefilter, day, 0.0)
+    
+def subprocessPredictfunc(datas, day):
+    #from tree2007 import tree1filter
+    from tree7y600pre import tree7y600prePrediction
+    for data in datas:
+        score = tree7y600prePrediction(data, day)
+        logging.info("Stock {1} - High: {0[0]}, Low: {0[1]}, MinusLow: {0[2]}, MinusHigh: {0[3]}".format(score, data.id))
+    
 prefixes = []
 #prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009', '6010', '6011', '6012', '6013', '6014', '6015', '6016', '6017',  '6018', '6019', '6030', '6031', '6032', '6033', '6034', '6035', '6036', '6037', '6038', '6039', '0020','0021','0022','0023','0024','0025','0026','0027','0028','0029']
 #prefixes = ['60030']
 #prefixes = ['6000','6001','6002','6003','6004','6005','6006','6007','6008','6009', '6010', '6011', '6012', '6013', '6014', '6015', '6016', '6017',  '6018', '6019', '6030', '6031', '6032', '6033', '6034', '6035', '6036', '6037', '6038', '6039']
+#prefixes = ["600107", "600143", "600195"]
 
 prefs = ['600','601', '603']
 for pref in prefs:
@@ -476,8 +485,8 @@ logging.basicConfig(filename= datetime.now().strftime("%Y_%m_%d_%H_%M_%S")+ '.lo
 #    sys.setrecursionlimit(4000)
 #logging.info("Current stack limit: {0}".format(sys.getrecursionlimit()))
 
-startday = datetime.strptime("2015-03-18", '%Y-%m-%d').date()
-endday = datetime.strptime("2015-06-18", '%Y-%m-%d').date()
+startday = datetime.strptime("2015-03-30", '%Y-%m-%d').date()
+endday = datetime.strptime("2015-06-30", '%Y-%m-%d').date()
 stocks = fetchData_mongo(prefixes, startday, endday)
 #writeToArffFile(stocks,"stock_7year.arff")
 
@@ -499,6 +508,7 @@ stocks = fetchData_mongo(prefixes, startday, endday)
 
 threading.stack_size(231072000)
 subthread = threading.Thread(target=subprocessfunc, args=(stocks, endday))
+#subthread = threading.Thread(target=subprocessPredictfunc, args=(stocks, endday))
 logging.info("subthread started.")
 subthread.start()
 subthread.join()
