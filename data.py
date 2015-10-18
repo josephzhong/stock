@@ -7,6 +7,113 @@ from multiprocessing.dummy import Pool as ThreadPool
 import tushare as ts
 import json, logging
 from pandas import Series
+
+def boolToInt(bool):
+    if(bool):
+        return 1
+    else:
+        return 0
+    
+def floatFormat(num):
+    if(math.isnan(num)):
+        return 0.0
+    else:
+        return float(int(num*1000))/1000
+
+def writeToJsonFileForTraining(dataArray):
+    file = open("stock.json", "w")
+    jsonobj = {}
+    
+    lastClose_bMds = []
+    lastOpen_bMds = []
+    lastClose_bUps = []
+    lastOpen_bUps = []
+    thisChanges = []
+    thisOpen_bUps = []
+    thisClose_bUps = []
+    thisV_bs = []
+    ifHengPans = []
+    results = []
+    
+    
+    for sample in dataArray:
+        for day in sample.dates:
+            conditionday = datetime.strptime(day, '%Y-%m-%d').date()
+            todayindex = sample.indexof(conditionday)
+            yesterdayindex = todayindex - 1
+            nextdayindex = todayindex + 1
+            if(yesterdayindex > -1 and nextdayindex < len(sample.dates) and yesterdayindex > 20 and todayindex > 20):
+                bMd = sample.bollMd(conditionday)
+                bUp = sample.bollUp(conditionday)
+                lastClose = sample.closePrices[yesterdayindex]
+                lastOpen = sample.openPrices[yesterdayindex]
+                thisChange = sample.changePrices[todayindex]
+                thisOpen = sample.openPrices[todayindex]
+                thisClose = sample.closePrices[todayindex]
+                thisV_b = sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])
+                if(bMd == 0.0 or bUp == 0.0):
+                    continue
+                lastClose_bMds.append(floatFormat((lastClose-bMd)/bMd))
+                lastOpen_bMds.append(floatFormat((lastOpen-bMd)/bMd))
+                lastClose_bUps.append(floatFormat((lastClose-bUp)/bUp))
+                lastOpen_bUps.append(floatFormat((lastOpen-bUp)/bUp))
+                thisChanges.append(floatFormat(sample.changePrices[todayindex]))
+                thisOpen_bUps.append(floatFormat((thisOpen-bUp)/bUp))
+                thisClose_bUps.append(floatFormat((thisClose-bUp)/bUp))
+                thisV_bs.append(floatFormat(sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])))
+                ifHengPans.append(sample.checkIfHengPan(conditionday))
+                results.append(sample.changePrices[nextdayindex] > 0.03 )
+    jsonobj = {"result": results, "lastClose_bMd": lastClose_bMds, "lastOpen_bMd": lastOpen_bMds, "lastClose_bUp": lastClose_bUps, "lastOpen_bUp": lastOpen_bUps, "thisChange": thisChanges, "thisOpen_bUp": thisOpen_bUps, "thisClose_bUp": thisClose_bUps, "thisV_b": thisV_bs, "ifHengPan": ifHengPans}
+    jsonstr = json.dumps(jsonobj, separators=(",", ": "))
+    file.write(jsonstr)
+    file.close()
+    
+def writeToArffFile(dataArray,filename):
+    file = open(filename, "w")
+    jsonobj = {}
+    
+    lastClose_bMds = []
+    lastOpen_bMds = []
+    lastClose_bUps = []
+    lastOpen_bUps = []
+    thisChanges = []
+    thisOpen_bUps = []
+    thisClose_bUps = []
+    thisV_bs = []
+    ifHengPans = []
+    results = []
+    
+    file.write("@relation stock\n")
+    file.write("\n")
+    dataexample = stockView()
+    memberlist = [m for m in dir(dataexample)]
+    attrs = []
+    for m in memberlist:
+        if m[0] != "_" and not callable(getattr(dataexample,m)):
+            attrs.append(m)
+    for attr in attrs:
+        if(attr != "result"):
+            file.write("@attribute {0} numeric\n".format(attr))
+    file.write("@attribute {0} {{High, Low, MinusHigh, MinusLow}}\n".format("result"))
+    file.write("\n")
+    file.write("@data\n")
+    total = len(dataArray)
+    prog = 0
+    for idx, sample in enumerate(dataArray):
+        if(int((idx+1)*100/total) > prog):
+            print ("{0}\tOutput: {1}%\n".format(datetime.now().strftime("%d %b %Y %H:%M:%S"), int((idx+1)*100/total)))
+            prog = (idx+1)*100/total
+        for day in sample.dates:
+            conditionday = datetime.strptime(day, '%Y-%m-%d').date()
+            data = stockView().fromStock(sample, conditionday)
+            if(data != None):
+                attrvalues = []
+                for attr in attrs:
+                    if(attr != "result"):
+                        attrvalues.append(getattr(data, attr))
+                file.write("{{0 {0[0]}, 1 {0[1]}, 2 {0[2]}, 3 {0[3]}, 4 {0[4]}, 5 {0[5]}, 6 {0[6]}, 7 {0[7]}, 8 {0[8]}, 9 {1}}}\n".format(attrvalues, data.result))
+    file.close()
+    
 def fetchDataOneThread(prefix, startday, endday):
     data = []
     for index in range(pow(10,(6-len(prefix)))):
@@ -30,7 +137,7 @@ def fetchDataOneThread(prefix, startday, endday):
             print (stockId + " is not a valid stock.\n")
     return data
 
-#ǰ��Ȩ
+#with qian fu quan
 def fetchDataOneThreadwithFQ(prefix, startday, endday):
     data = []
     for index in range(pow(10,(6-len(prefix)))):
@@ -124,6 +231,7 @@ def storeData(prefix, startday, endday, client):
                 ticks = database.ticks
             #tick = ticks.find_one({"stockId": stockId, "date":{'$gte': startday.isoformat(),'$lte': endday.isoformat()}})
             #if(tick == None):
+            print (stockId + " data required.\n")
             ticks.insert(json.loads(results.to_json(orient='records')))
             dates = results.index.tolist()
             if(newlastday == None or newlastday < dates[0].date()):
