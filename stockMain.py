@@ -1,9 +1,7 @@
-# -*- coding:utf-8 -*-  
-from os.path import exists, join
+# -*- coding:utf-8 -*-
 import threading
-import math, random, warnings,logging, sys
-#from tree import tree1
-#from tree2007 import tree1filter
+# from tree import tree1
+# from tree2007 import tree1filter
 from stockclass import Stock
 from data import *
 from filter import *
@@ -26,7 +24,7 @@ class stockView:
         todayindex = sample.indexof(conditionday)
         yesterdayindex = todayindex - 1
         nextdayindex = todayindex + 1
-        if(yesterdayindex > -1 and nextdayindex < len(sample.dates) and yesterdayindex > 20 and todayindex > 20):
+        if yesterdayindex > -1 and nextdayindex < len(sample.dates) and yesterdayindex > 20 and todayindex > 20:
             bMd = sample.bollMd(conditionday)
             bUp = sample.bollUp(conditionday)
             lastClose = sample.closePrices[yesterdayindex]
@@ -35,7 +33,7 @@ class stockView:
             thisOpen = sample.openPrices[todayindex]
             thisClose = sample.closePrices[todayindex]
             thisV_b = sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex])
-            if(bMd == 0.0 or bUp == 0.0):
+            if bMd == 0.0 or bUp == 0.0:
                 return None
             self.lastClose_bMd = floatFormat((lastClose-bMd)/bMd)
             self.lastOpen_bMd = floatFormat((lastOpen-bMd)/bMd)
@@ -46,13 +44,13 @@ class stockView:
             self.thisClose_bUp = floatFormat((thisClose-bUp)/bUp)
             self.thisV_b = floatFormat(sample.v_b(sample.v_ma5[todayindex], sample.volume[todayindex]))
             self.ifHengPan = boolToInt(sample.checkIfHengPan(conditionday))
-            if(sample.changePrices[nextdayindex] > 0.05):
+            if sample.changePrices[nextdayindex] > 0.05:
                 self.result = "High"
             else:
-                if(sample.changePrices[nextdayindex] >=0 and sample.changePrices[nextdayindex] <= 0.05):
+                if sample.changePrices[nextdayindex] >=0 and sample.changePrices[nextdayindex] <= 0.05:
                     self.result = "Low"
                 else:
-                    if(sample.changePrices[nextdayindex] < 0 and sample.changePrices[nextdayindex] >= -0.05):
+                    if sample.changePrices[nextdayindex] < 0 and sample.changePrices[nextdayindex] >= -0.05:
                         self.result = "MinusLow"
                     else:
                         self.result = "MinusHigh"
@@ -66,29 +64,29 @@ def printGoodStock(stocks, filter, day):
     today = day
     goodstocks = filter(stocks, today)
     logging.info(filter.__name__ + " Good stocks: ")
-    if (len(goodstocks) == 0):
+    if len(goodstocks) == 0:
         logging.info("No good stock found.")
     for idx1, data1 in enumerate(goodstocks):
-        if(idx1 < len(goodstocks) - 1 ):
+        if idx1 < len(goodstocks) - 1:
             for idx2, data2 in enumerate(goodstocks[idx1:]):
-                if(idx2 < len(goodstocks) - 1):
-                    if(goodstocks[idx2].score < goodstocks[idx2 + 1].score):
+                if idx2 < len(goodstocks) - 1:
+                    if goodstocks[idx2].score < goodstocks[idx2 + 1].score:
                         temp = goodstocks[idx2]
                         goodstocks[idx2] = goodstocks[idx2 + 1]
                         goodstocks[idx2 + 1] = temp
     for stock in goodstocks:
         logging.info("{0}\t{1}\t{2}\tlast day of data on {3}".format(stock.id, stock.name, stock.score, stock.dates[len(stock.dates) - 1]))
 
-#run the model to print the good stocks for next day and verify the model. threshold is 0.0 by default
+# run the model to print the good stocks for next day and verify the model. threshold is 0.0 by default
 def subprocessfunc(data, day):
-    #from tree2007 import tree1filter
+    # from tree2007 import tree1filter
     from tree7y600pre import tree7y600prefilter
     printGoodStock(data, tree7y600prefilter, day)
     verify(data, tree7y600prefilter, day, 0.0)
 
 #To predict the result of some specific stock given in datas
 def subprocessPredictfunc(datas, day):
-    #from tree2007 import tree1filter
+    # from tree2007 import tree1filter
     from tree7y600pre import tree7y600prePrediction
     for data in datas:
         score = tree7y600prePrediction(data, day)
@@ -106,23 +104,23 @@ for pref in prefs:
 logging.basicConfig(filename= datetime.now().strftime("%Y_%m_%d_%H_%M_%S")+ '.log',level=logging.DEBUG)
 
 
-#if(sys.getrecursionlimit() < 4000):
+# if(sys.getrecursionlimit() < 4000):
 #    sys.setrecursionlimit(4000)
-#logging.info("Current stack limit: {0}".format(sys.getrecursionlimit()))
+# logging.info("Current stack limit: {0}".format(sys.getrecursionlimit()))
 
 startday = datetime.strptime("2015-07-01", '%Y-%m-%d').date()
 endday = datetime.strptime("2015-10-16", '%Y-%m-%d').date()
 stocks = fetchData_mongo(prefixes, startday, endday)
-#writeToArffFile(stocks,"stock_7year.arff")
+# writeToArffFile(stocks,"stock_7year.arff")
 
 threading.stack_size(231072000)
 subthread = threading.Thread(target=subprocessfunc, args=(stocks, endday))
-#subthread = threading.Thread(target=subprocessPredictfunc, args=(stocks, endday))
+# subthread = threading.Thread(target=subprocessPredictfunc, args=(stocks, endday))
 logging.info("subthread started.")
 subthread.start()
 subthread.join()
 
-#printGoodStock(stocks, tree1filter)
-#verify(stocks, tree1filter, date.today(), 0.0)
+# printGoodStock(stocks, tree1filter)
+# verify(stocks, tree1filter, date.today(), 0.0)
 logging.shutdown()
 print ("Script ends.")
